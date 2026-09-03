@@ -1,0 +1,33 @@
+package com.example.Quick_fix.ResponseModel;
+
+import java.time.LocalDateTime;
+
+import com.example.Quick_fix.Enums.ContactType;
+
+import lombok.Builder;
+import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+
+@Data
+@Getter
+@Setter
+@Builder
+public class CustomerContactResponseModel {
+
+    private Long id;
+
+    private Long customerId;
+
+    private ContactType contactType;
+
+    private String contactValue;
+
+    private boolean primaryContact;
+
+    private boolean verified;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+}
