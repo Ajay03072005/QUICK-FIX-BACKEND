@@ -1,5 +1,28 @@
 package com.example.Quick_fix.ResponseModel;
 
-public class ProviderResponseModel {
+import java.util.List;
 
+import com.example.Quick_fix.requestModel.ProviderAddressRequestModel;
+import com.example.Quick_fix.requestModel.ProviderContactRequestModel;
+import com.example.Quick_fix.requestModel.ProviderDocumentRequestModel;
+import com.example.Quick_fix.requestModel.ProviderServiceHistoryRequestModel;
+
+import lombok.Data;
+
+@Data
+public class ProviderResponseModel {
+	private String name;
+
+    private String phoneNumber;
+
+    private String email;
+
+    private List<ProviderServiceHistoryRequestModel> providerServices;
+
+    private List<ProviderAddressRequestModel> addresses;
+
+    private List<ProviderDocumentRequestModel> documents;
+
+    
+    private List<ProviderContactRequestModel> contacts;
 }

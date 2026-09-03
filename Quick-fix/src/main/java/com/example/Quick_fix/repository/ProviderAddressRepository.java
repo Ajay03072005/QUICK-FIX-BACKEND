@@ -3,9 +3,9 @@ package com.example.Quick_fix.repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import com.example.Quick_fix.Entity.ProviderEntity;
+import com.example.Quick_fix.Entity.ProviderAddressEntity;
 
 @Repository
-public interface ProviderRepository extends JpaRepository<ProviderEntity,Integer>{
+public interface ProviderAddressRepository extends JpaRepository<ProviderAddressEntity,Integer > {
 
 }
