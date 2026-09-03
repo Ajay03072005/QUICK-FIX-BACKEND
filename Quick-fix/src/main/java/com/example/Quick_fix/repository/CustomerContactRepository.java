@@ -1,5 +1,15 @@
 package com.example.Quick_fix.repository;
 
-public interface CustomerContactRepository {
+import java.util.List;
+import java.util.Optional;
 
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface CustomerContactRepository extends JpaRepository<CustomerContactEntity, Long> {
+
+	List<CustomerContactEntity> findByCustomerId(Long customerId);
+
+	Optional<CustomerContactEntity> findByIdAndCustomerId(Long id, Long customerId);
 }
