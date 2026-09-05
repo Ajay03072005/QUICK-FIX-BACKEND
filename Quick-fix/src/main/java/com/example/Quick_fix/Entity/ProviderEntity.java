@@ -2,6 +2,7 @@ package com.example.Quick_fix.Entity;
 
 import java.util.List;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -26,16 +27,28 @@ public class ProviderEntity {
     private String phoneNumber;
 
     private String email;
-
-    @OneToMany(mappedBy = "provider")
+    @OneToMany(
+    	    mappedBy = "provider",
+    	    cascade = CascadeType.ALL,
+    	    orphanRemoval = true
+    	)
     private List<ProviderServiceHistoryEntity> providerServices;
-
-    @OneToMany(mappedBy = "provider")
+    @OneToMany(
+    	    mappedBy = "provider",
+    	    cascade = CascadeType.ALL,
+    	    orphanRemoval = true
+    	)
     private List<ProviderAddressEntity> addresses;
-
-    @OneToMany(mappedBy = "provider")
+    @OneToMany(
+    	    mappedBy = "provider",
+    	    cascade = CascadeType.ALL,
+    	    orphanRemoval = true
+    	)
     private List<ProviderDocumentEntity> documents;
-
-    @OneToMany(mappedBy = "provider")
+    @OneToMany(
+    	    mappedBy = "provider",
+    	    cascade = CascadeType.ALL,
+    	    orphanRemoval = true
+    	)
     private List<ProviderContactEntity> contacts;
 }

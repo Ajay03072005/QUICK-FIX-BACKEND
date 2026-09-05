@@ -6,6 +6,7 @@ import com.example.Quick_fix.requestModel.ProviderAddressRequestModel;
 import com.example.Quick_fix.requestModel.ProviderContactRequestModel;
 import com.example.Quick_fix.requestModel.ProviderDocumentRequestModel;
 import com.example.Quick_fix.requestModel.ProviderServiceHistoryRequestModel;
+import com.example.Quick_fix.requestModel.ProviderServiceHistoryResponseModel;
 
 import lombok.Data;
 
@@ -17,12 +18,12 @@ public class ProviderResponseModel {
 
     private String email;
 
-    private List<ProviderServiceHistoryRequestModel> providerServices;
+    private List<ProviderServiceHistoryReponseModel> providerServices;
 
-    private List<ProviderAddressRequestModel> addresses;
+    private List<ProviderAddressReponseModel> addresses;
 
-    private List<ProviderDocumentRequestModel> documents;
+    private List<ProviderDocumentReponseModel> documents;
 
     
-    private List<ProviderContactRequestModel> contacts;
+    private List<ProviderContactResponseModel> contacts;
 }
