@@ -3,6 +3,7 @@ package com.example.Quick_fix.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.Quick_fix.Entity.CustomerAddressEntity;
@@ -36,6 +37,7 @@ public class CustomerService {
 	private final CustomerAuthRepository customerAuthRepository;
 	private final CustomerAddressRepository customerAddressRepository;
 	private final CustomerContactRepository customerContactRepository;
+	private final PasswordEncoder passwordEncoder;
 
 	// =========================================================
 	// CUSTOMER
@@ -110,7 +112,7 @@ public class CustomerService {
 		CustomerAuthEntity auth = new CustomerAuthEntity();
 		auth.setCustomer(customer);
 		auth.setEmail(request.getEmail());
-		auth.setPassword(request.getPassword());
+		auth.setPassword(passwordEncoder.encode(request.getPassword()));
 		auth.setEmailVerified(false);
 
 		auth = customerAuthRepository.save(auth);
@@ -121,7 +123,7 @@ public class CustomerService {
 	public CustomerAuthResponseModel login(CustomerAuthRequestModel request) {
 		CustomerAuthEntity auth = customerAuthRepository.findByEmail(request.getEmail())
 				.orElseThrow(() -> new RuntimeException("Invalid email or password"));
-		if (!auth.getPassword().equals(request.getPassword())) {
+		if (!passwordEncoder.matches(request.getPassword(), auth.getPassword())) {
 			throw new RuntimeException("Invalid email or password");
 		}
 		auth.setLastLoginAt(LocalDateTime.now());
