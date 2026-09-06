@@ -1,0 +1,24 @@
+package com.example.Quick_fix.Enums;
+
+public enum BookingStatus {
+
+	PENDING,
+
+	PROVIDER_SELECTED,
+
+	WAITING_FOR_PROVIDER,
+
+	PROVIDER_ACCEPTED,
+
+	CONFIRMED,
+
+	IN_PROGRESS,
+
+	COMPLETED,
+
+	PROVIDER_REJECTED,
+
+	CUSTOMER_CANCELLED,
+
+	PROVIDER_CANCELLED
+}
