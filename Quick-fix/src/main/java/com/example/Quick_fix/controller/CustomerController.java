@@ -43,16 +43,16 @@ public class CustomerController {
 	}
 
 	@PutMapping("/{customerId}")
-	public ResponseEntity<CustomerResponseModel> updateCustomer(@PathVariable Long customerId,
+	public ResponseEntity<CustomerResponseModel> updateCustomer(@RequestParam String CustomerUniqueId,
 			@RequestBody CustomerRequestModel request) {
 
-		return ResponseEntity.ok(customerService.updateCustomer(customerId, request));
+		return ResponseEntity.ok(customerService.updateCustomer(CustomerUniqueId, request));
 	}
 
 	@DeleteMapping("/{customerId}")
-	public ResponseEntity<Void> deleteCustomer(@PathVariable Long customerId) {
+	public ResponseEntity<Void> deleteCustomer(@RequestParam String CustomerUniqueId) {
 
-		customerService.deleteCustomer(customerId);
+		customerService.deleteCustomer(CustomerUniqueId);
 
 		return ResponseEntity.noContent().build();
 	}
@@ -85,16 +85,16 @@ public class CustomerController {
 	}
 
 	@GetMapping("/{customerId}/addresses")
-	public ResponseEntity<List<CustomerAddressResponseModel>> getAddresses(@PathVariable Long customerId) {
+	public ResponseEntity<List<CustomerAddressResponseModel>> getAddresses(@RequestParam String CustomerUniqueId) {
 
-		return ResponseEntity.ok(customerService.getAddresses(customerId));
+		return ResponseEntity.ok(customerService.getAddresses(CustomerUniqueId));
 	}
 
 	@PutMapping("/{customerId}/addresses/{addressId}")
-	public ResponseEntity<CustomerAddressResponseModel> updateAddress(@PathVariable Long customerId,
-			@PathVariable Long addressId, @RequestBody CustomerAddressRequestModel request) {
+	public ResponseEntity<CustomerAddressResponseModel> updateAddress(@RequestParam String CustomerUniqueId,
+			@RequestParam String addressUniqueId, @RequestBody CustomerAddressRequestModel request) {
 
-		return ResponseEntity.ok(customerService.updateAddress(customerId, addressId, request));
+		return ResponseEntity.ok(customerService.updateAddress(CustomerUniqueId, addressUniqueId, request));
 	}
 
 	@DeleteMapping("/{customerId}/addresses/{addressId}")
