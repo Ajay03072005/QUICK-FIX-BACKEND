@@ -2,69 +2,75 @@ package com.example.Quick_fix.controller;
 
 import java.util.List;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import com.example.Quick_fix.ResponseModel.CustomerAddressResponseModel;
-import com.example.Quick_fix.ResponseModel.CustomerAuthResponseModel;
-import com.example.Quick_fix.ResponseModel.CustomerContactResponseModel;
-import com.example.Quick_fix.ResponseModel.CustomerResponseModel;
 import com.example.Quick_fix.requestModel.CustomerAddressRequestModel;
 import com.example.Quick_fix.requestModel.CustomerAuthRequestModel;
 import com.example.Quick_fix.requestModel.CustomerContactRequestModel;
 import com.example.Quick_fix.requestModel.CustomerRegisterRequestModel;
 import com.example.Quick_fix.requestModel.CustomerRequestModel;
+import com.example.Quick_fix.ResponseModel.CustomerAddressResponseModel;
+import com.example.Quick_fix.ResponseModel.CustomerAuthResponseModel;
+import com.example.Quick_fix.ResponseModel.CustomerContactResponseModel;
+import com.example.Quick_fix.ResponseModel.CustomerResponseModel;
 import com.example.Quick_fix.service.CustomerService;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/customers")
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class CustomerController {
 
 	private final CustomerService customerService;
 
 	// =========================
-	// Customer
+	// CUSTOMER
 	// =========================
 
 	@PostMapping
 	public ResponseEntity<CustomerResponseModel> createCustomer(@RequestBody CustomerRequestModel request) {
 
-		return ResponseEntity.status(HttpStatus.CREATED).body(customerService.createCustomer(request));
+		return ResponseEntity.ok(customerService.createCustomer(request));
 	}
 
-	@GetMapping("/{customerId}")
-	public ResponseEntity<CustomerResponseModel> getCustomer(@PathVariable Long customerId) {
+	@GetMapping("/{customerUniqueId}")
+	public ResponseEntity<CustomerResponseModel> getCustomer(@PathVariable String customerUniqueId) {
 
-		return ResponseEntity.ok(customerService.getCustomer(customerId));
+		return ResponseEntity.ok(customerService.getCustomer(customerUniqueId));
 	}
 
-	@PutMapping("/{customerId}")
-	public ResponseEntity<CustomerResponseModel> updateCustomer(@RequestParam String CustomerUniqueId,
+	@PutMapping("/{customerUniqueId}")
+	public ResponseEntity<CustomerResponseModel> updateCustomer(@PathVariable String customerUniqueId,
 			@RequestBody CustomerRequestModel request) {
 
-		return ResponseEntity.ok(customerService.updateCustomer(CustomerUniqueId, request));
+		return ResponseEntity.ok(customerService.updateCustomer(customerUniqueId, request));
 	}
 
-	@DeleteMapping("/{customerId}")
-	public ResponseEntity<Void> deleteCustomer(@RequestParam String CustomerUniqueId) {
+	@DeleteMapping("/{customerUniqueId}")
+	public ResponseEntity<Void> deleteCustomer(@PathVariable String customerUniqueId) {
 
-		customerService.deleteCustomer(CustomerUniqueId);
+		customerService.deleteCustomer(customerUniqueId);
 
 		return ResponseEntity.noContent().build();
 	}
 
 	// =========================
-	// Authentication
+	// CUSTOMER AUTH
 	// =========================
 
 	@PostMapping("/auth/register")
 	public ResponseEntity<String> register(@RequestBody CustomerRegisterRequestModel request) {
 
-		return ResponseEntity.status(HttpStatus.CREATED).body(customerService.register(request));
+		return ResponseEntity.ok(customerService.register(request));
 	}
 
 	@PostMapping("/auth/login")
@@ -74,65 +80,67 @@ public class CustomerController {
 	}
 
 	// =========================
-	// Address
+	// CUSTOMER ADDRESS
 	// =========================
 
-	@PostMapping("/{customerId}/addresses")
-	public ResponseEntity<CustomerAddressResponseModel> addAddress(@PathVariable Long customerId,
+	@PostMapping("/{customerUniqueId}/addresses")
+	public ResponseEntity<CustomerAddressResponseModel> addAddress(@PathVariable String customerUniqueId,
 			@RequestBody CustomerAddressRequestModel request) {
 
-		return ResponseEntity.status(HttpStatus.CREATED).body(customerService.addAddress(customerId, request));
+		return ResponseEntity.ok(customerService.addAddress(customerUniqueId, request));
 	}
 
-	@GetMapping("/{customerId}/addresses")
-	public ResponseEntity<List<CustomerAddressResponseModel>> getAddresses(@RequestParam String CustomerUniqueId) {
+	@GetMapping("/{customerUniqueId}/addresses")
+	public ResponseEntity<List<CustomerAddressResponseModel>> getAddresses(@PathVariable String customerUniqueId) {
 
-		return ResponseEntity.ok(customerService.getAddresses(CustomerUniqueId));
+		return ResponseEntity.ok(customerService.getAddresses(customerUniqueId));
 	}
 
-	@PutMapping("/{customerId}/addresses/{addressId}")
-	public ResponseEntity<CustomerAddressResponseModel> updateAddress(@RequestParam String CustomerUniqueId,
-			@RequestParam String addressUniqueId, @RequestBody CustomerAddressRequestModel request) {
+	@PutMapping("/{customerUniqueId}/addresses/{addressUniqueId}")
+	public ResponseEntity<CustomerAddressResponseModel> updateAddress(@PathVariable String customerUniqueId,
+			@PathVariable String addressUniqueId, @RequestBody CustomerAddressRequestModel request) {
 
-		return ResponseEntity.ok(customerService.updateAddress(CustomerUniqueId, addressUniqueId, request));
+		return ResponseEntity.ok(customerService.updateAddress(customerUniqueId, addressUniqueId, request));
 	}
 
-	@DeleteMapping("/{customerId}/addresses/{addressId}")
-	public ResponseEntity<Void> deleteAddress(@PathVariable Long customerId, @PathVariable Long addressId) {
+	@DeleteMapping("/{customerUniqueId}/addresses/{addressUniqueId}")
+	public ResponseEntity<Void> deleteAddress(@PathVariable String customerUniqueId,
+			@PathVariable String addressUniqueId) {
 
-		customerService.deleteAddress(customerId, addressId);
+		customerService.deleteAddress(customerUniqueId, addressUniqueId);
 
 		return ResponseEntity.noContent().build();
 	}
 
 	// =========================
-	// Contact
+	// CUSTOMER CONTACT
 	// =========================
 
-	@PostMapping("/{customerId}/contacts")
-	public ResponseEntity<CustomerContactResponseModel> addContact(@PathVariable Long customerId,
+	@PostMapping("/{customerUniqueId}/contacts")
+	public ResponseEntity<CustomerContactResponseModel> addContact(@PathVariable String customerUniqueId,
 			@RequestBody CustomerContactRequestModel request) {
 
-		return ResponseEntity.status(HttpStatus.CREATED).body(customerService.addContact(customerId, request));
+		return ResponseEntity.ok(customerService.addContact(customerUniqueId, request));
 	}
 
-	@GetMapping("/{customerId}/contacts")
-	public ResponseEntity<List<CustomerContactResponseModel>> getContacts(@PathVariable Long customerId) {
+	@GetMapping("/{customerUniqueId}/contacts")
+	public ResponseEntity<List<CustomerContactResponseModel>> getContacts(@PathVariable String customerUniqueId) {
 
-		return ResponseEntity.ok(customerService.getContacts(customerId));
+		return ResponseEntity.ok(customerService.getContacts(customerUniqueId));
 	}
 
-	@PutMapping("/{customerId}/contacts/{contactId}")
-	public ResponseEntity<CustomerContactResponseModel> updateContact(@PathVariable Long customerId,
-			@PathVariable Long contactId, @RequestBody CustomerContactRequestModel request) {
+	@PutMapping("/{customerUniqueId}/contacts/{contactUniqueId}")
+	public ResponseEntity<CustomerContactResponseModel> updateContact(@PathVariable String customerUniqueId,
+			@PathVariable String contactUniqueId, @RequestBody CustomerContactRequestModel request) {
 
-		return ResponseEntity.ok(customerService.updateContact(customerId, contactId, request));
+		return ResponseEntity.ok(customerService.updateContact(customerUniqueId, contactUniqueId, request));
 	}
 
-	@DeleteMapping("/{customerId}/contacts/{contactId}")
-	public ResponseEntity<Void> deleteContact(@PathVariable Long customerId, @PathVariable Long contactId) {
+	@DeleteMapping("/{customerUniqueId}/contacts/{contactUniqueId}")
+	public ResponseEntity<Void> deleteContact(@PathVariable String customerUniqueId,
+			@PathVariable String contactUniqueId) {
 
-		customerService.deleteContact(customerId, contactId);
+		customerService.deleteContact(customerUniqueId, contactUniqueId);
 
 		return ResponseEntity.noContent().build();
 	}

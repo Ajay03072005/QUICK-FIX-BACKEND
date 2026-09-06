@@ -62,9 +62,9 @@ public class CustomerService {
 		return mapCustomerResponse(customer);
 	}
 
-	public CustomerResponseModel getCustomer(Long customerId) {
+	public CustomerResponseModel getCustomer(String customerUniqueId) {
 
-		CustomerEntity customer = customerRepository.findById(customerId)
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId)
 				.orElseThrow(() -> new RuntimeException("Customer not found"));
 
 		return mapCustomerResponse(customer);
@@ -140,9 +140,9 @@ public class CustomerService {
 	// ADDRESS
 	// =========================================================
 
-	public CustomerAddressResponseModel addAddress(Long customerId, CustomerAddressRequestModel request) {
+	public CustomerAddressResponseModel addAddress(String customerUniqueId, CustomerAddressRequestModel request) {
 
-		CustomerEntity customer = customerRepository.findById(customerId)
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId)
 				.orElseThrow(() -> new RuntimeException("Customer not found"));
 
 		CustomerAddressEntity address = new CustomerAddressEntity();
@@ -200,12 +200,13 @@ public class CustomerService {
 		return mapAddressResponse(address);
 	}
 
-	public void deleteAddress(Long customerId, Long addressId) {
-
-		CustomerAddressEntity address = customerAddressRepository.findById(addressId)
+	public void deleteAddress(String customerUniqueId , String addressUniqueId) {
+		
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId).orElseThrow();
+		CustomerAddressEntity address = customerAddressRepository.findByUniqueId(addressUniqueId)
 				.orElseThrow(() -> new RuntimeException("Address not found"));
 
-		if (!address.getCustomer().getId().equals(customerId)) {
+		if (!address.getCustomer().getId().equals(customer.getId())) {
 			throw new RuntimeException("Address does not belong to this customer");
 		}
 
@@ -216,9 +217,9 @@ public class CustomerService {
 	// CONTACT
 	// =========================================================
 
-	public CustomerContactResponseModel addContact(Long customerId, CustomerContactRequestModel request) {
+	public CustomerContactResponseModel addContact(String customerUniqueId, CustomerContactRequestModel request) {
 
-		CustomerEntity customer = customerRepository.findById(customerId)
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId)
 				.orElseThrow(() -> new RuntimeException("Customer not found"));
 
 		CustomerContactEntity contact = new CustomerContactEntity();
@@ -234,22 +235,23 @@ public class CustomerService {
 		return mapContactResponse(contact);
 	}
 
-	public List<CustomerContactResponseModel> getContacts(Long customerId) {
+	public List<CustomerContactResponseModel> getContacts(String customerUniqueId) {
 
-		if (!customerRepository.existsById(customerId)) {
+		if (!customerRepository.existsByuniqueId(customerUniqueId)) {
 			throw new RuntimeException("Customer not found");
 		}
-
-		return customerContactRepository.findByCustomerId(customerId).stream().map(this::mapContactResponse).toList();
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId).orElseThrow();
+		return customerContactRepository.findByCustomerId(customer.getId()).stream().map(this::mapContactResponse).toList();
 	}
 
-	public CustomerContactResponseModel updateContact(Long customerId, Long contactId,
+	public CustomerContactResponseModel updateContact(String customerUniqueId, String ContactUniqueId,
 			CustomerContactRequestModel request) {
 
-		CustomerContactEntity contact = customerContactRepository.findById(contactId)
+		CustomerContactEntity contact = customerContactRepository.findByUniqueId(ContactUniqueId)
 				.orElseThrow(() -> new RuntimeException("Contact not found"));
-
-		if (!contact.getCustomer().getId().equals(customerId)) {
+		
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId).orElseThrow();
+		if (!contact.getCustomer().getId().equals(customer.getId())) {
 			throw new RuntimeException("Contact does not belong to this customer");
 		}
 
@@ -263,12 +265,12 @@ public class CustomerService {
 		return mapContactResponse(contact);
 	}
 
-	public void deleteContact(Long customerId, Long contactId) {
+	public void deleteContact(String customerUniqueId, String ContactUniqueId) {
 
-		CustomerContactEntity contact = customerContactRepository.findById(contactId)
+		CustomerContactEntity contact = customerContactRepository.findByUniqueId(ContactUniqueId)
 				.orElseThrow(() -> new RuntimeException("Contact not found"));
-
-		if (!contact.getCustomer().getId().equals(customerId)) {
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId).orElseThrow();
+		if (!contact.getCustomer().getId().equals(customer.getId())) {
 			throw new RuntimeException("Contact does not belong to this customer");
 		}
 
