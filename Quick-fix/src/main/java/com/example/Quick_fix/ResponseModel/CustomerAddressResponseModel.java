@@ -30,6 +30,8 @@ public class CustomerAddressResponseModel {
     private Double latitude;
 
     private Double longitude;
+    
+    private String uniqueId;
 
     private boolean defaultAddress;
 

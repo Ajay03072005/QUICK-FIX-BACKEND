@@ -11,9 +11,11 @@ public class ProviderContactResponseModel {
 
    
     private String phoneNumber;
-
-
+    
+    
     private String email;
 
     private Boolean primary;
+    
+    private String uniqueId;
 }

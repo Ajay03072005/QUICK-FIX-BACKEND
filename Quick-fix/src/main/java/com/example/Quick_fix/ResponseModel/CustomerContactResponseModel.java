@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 
 import com.example.Quick_fix.Enums.ContactType;
 
-import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -25,6 +24,8 @@ public class CustomerContactResponseModel {
     private boolean primaryContact;
 
     private boolean verified;
+    
+    private String uniqueId;
 
     private LocalDateTime createdAt;
 

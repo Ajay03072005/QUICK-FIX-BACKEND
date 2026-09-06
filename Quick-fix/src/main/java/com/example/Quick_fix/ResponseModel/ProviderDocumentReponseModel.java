@@ -19,6 +19,8 @@ public class ProviderDocumentReponseModel {
 
 	    private String fileUrl;
 	    
+	    private String uniqueId;
+	    
 	    private LocalDate issueDate;
 
 	    private LocalDate expiryDate;

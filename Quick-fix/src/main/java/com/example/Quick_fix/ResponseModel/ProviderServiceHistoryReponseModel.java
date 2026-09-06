@@ -19,6 +19,8 @@ public class ProviderServiceHistoryReponseModel {
 
 	    
 	    private String notes;
+	    
+	    private String uniqueId;
 
 	    private LocalDateTime createdDate;
 

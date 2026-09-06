@@ -15,6 +15,7 @@ import com.example.Quick_fix.ResponseModel.CustomerAddressResponseModel;
 import com.example.Quick_fix.ResponseModel.CustomerAuthResponseModel;
 import com.example.Quick_fix.ResponseModel.CustomerContactResponseModel;
 import com.example.Quick_fix.ResponseModel.CustomerResponseModel;
+import com.example.Quick_fix.commons.Common;
 import com.example.Quick_fix.repository.CustomerAddressRepository;
 import com.example.Quick_fix.repository.CustomerAuthRepository;
 import com.example.Quick_fix.repository.CustomerContactRepository;
@@ -38,6 +39,8 @@ public class CustomerService {
 	private final CustomerAddressRepository customerAddressRepository;
 	private final CustomerContactRepository customerContactRepository;
 	private final PasswordEncoder passwordEncoder;
+	private final Common commons;
+	
 
 	// =========================================================
 	// CUSTOMER
@@ -54,6 +57,7 @@ public class CustomerService {
 		customer.setGender(request.getGender());
 		customer.setDateOfBirth(request.getDateOfBirth());
 		customer.setStatus(CustomerStatus.ACTIVE);
+		customer.setUniqueId(commons.generateUniqueId());
 		customer = customerRepository.save(customer);
 		return mapCustomerResponse(customer);
 	}
@@ -66,9 +70,9 @@ public class CustomerService {
 		return mapCustomerResponse(customer);
 	}
 
-	public CustomerResponseModel updateCustomer(Long customerId, CustomerRequestModel request) {
+	public CustomerResponseModel updateCustomer(String customerUniqueId, CustomerRequestModel request) {
 
-		CustomerEntity customer = customerRepository.findById(customerId)
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId)
 				.orElseThrow(() -> new RuntimeException("Customer not found"));
 
 		customer.setFirstName(request.getFirstName());
@@ -84,9 +88,9 @@ public class CustomerService {
 		return mapCustomerResponse(customer);
 	}
 
-	public void deleteCustomer(Long customerId) {
+	public void deleteCustomer(String customerUniqueId) {
 
-		CustomerEntity customer = customerRepository.findById(customerId)
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId)
 				.orElseThrow(() -> new RuntimeException("Customer not found"));
 		// If using CustomerStatus for soft delete
 		// customer.setStatus(CustomerStatus.INACTIVE);
@@ -108,6 +112,7 @@ public class CustomerService {
 		customer.setDateOfBirth(request.getDateOfBirth());
 		customer.setGender(request.getGender());
 		customer.setLastName(request.getLastName());
+		customer.setUniqueId(commons.generateUniqueId());
 		customer = customerRepository.save(customer);
 		CustomerAuthEntity auth = new CustomerAuthEntity();
 		auth.setCustomer(customer);
@@ -153,28 +158,29 @@ public class CustomerService {
 		address.setLatitude(request.getLatitude());
 		address.setLongitude(request.getLongitude());
 		address.setDefaultAddress(request.isDefaultAddress());
-
+		address.setUniqueId(commons.generateUniqueId());
 		address = customerAddressRepository.save(address);
 
 		return mapAddressResponse(address);
 	}
 
-	public List<CustomerAddressResponseModel> getAddresses(Long customerId) {
+	public List<CustomerAddressResponseModel> getAddresses(String customerUniqueId) {
 
-		if (!customerRepository.existsById(customerId)) {
+		if (!customerRepository.existsByuniqueId(customerUniqueId)) {
 			throw new RuntimeException("Customer not found");
 		}
-
-		return customerAddressRepository.findByCustomerId(customerId).stream().map(this::mapAddressResponse).toList();
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId).orElseThrow();
+		return customerAddressRepository.findByCustomerId(customer.getId()).stream().map(this::mapAddressResponse).toList();
 	}
 
-	public CustomerAddressResponseModel updateAddress(Long customerId, Long addressId,
+	public CustomerAddressResponseModel updateAddress(String customerUniqueId,String addressUniqueId,
 			CustomerAddressRequestModel request) {
 
-		CustomerAddressEntity address = customerAddressRepository.findById(addressId)
+		CustomerAddressEntity address = customerAddressRepository.findByUniqueId(addressUniqueId)
 				.orElseThrow(() -> new RuntimeException("Address not found"));
-
-		if (!address.getCustomer().getId().equals(customerId)) {
+		
+		CustomerEntity customer = customerRepository.findByUniqueId(customerUniqueId).orElseThrow();
+		if (!address.getCustomer().getId().equals(customer.getId())) {
 			throw new RuntimeException("Address does not belong to this customer");
 		}
 

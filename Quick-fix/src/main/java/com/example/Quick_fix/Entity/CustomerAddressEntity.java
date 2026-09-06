@@ -24,7 +24,9 @@ public class CustomerAddressEntity extends BaseEntity{
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
-
+	
+	private String uniqueId;
+	
 	@ManyToOne
 	@JoinColumn(name = "customer_id", nullable = false)
 	private CustomerEntity customer;

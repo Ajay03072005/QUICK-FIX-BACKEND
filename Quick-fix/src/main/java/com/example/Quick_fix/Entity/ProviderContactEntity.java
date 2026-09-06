@@ -41,4 +41,6 @@ public class ProviderContactEntity {
 
     @Column(name = "IS_PRIMARY")
     private Boolean primary;
+    
+    private String uniqueId;
 }

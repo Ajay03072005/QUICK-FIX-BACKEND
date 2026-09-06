@@ -36,4 +36,6 @@ public class CustomerContactEntity {
 	private boolean primaryContact;
 
 	private boolean verified;
+	
+	private String uniqueId;
 }

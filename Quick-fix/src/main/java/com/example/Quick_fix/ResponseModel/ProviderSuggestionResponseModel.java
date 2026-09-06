@@ -22,4 +22,6 @@ public class ProviderSuggestionResponseModel {
     private Double totalAmount;
 
     private boolean available;
+    
+    private String uniqueId;
 }

@@ -62,4 +62,10 @@ public class ServiceBookingEntity extends BaseEntity {
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
 	private PaymentStatus paymentStatus;
+	
+	@Column(name = "RECIPIENT_NAME", nullable = false)
+	private String recipientName;
+
+	@Column(name = "RECIPIENT_PHONE", nullable = false)
+	private String recipientPhone;
 }

@@ -24,6 +24,8 @@ public class CustomerResponseModel {
     private CustomerStatus status;
     
     private String phoneNumber;
+    
+    private String uniqueId;
 
     private LocalDate dateOfBirth;
 

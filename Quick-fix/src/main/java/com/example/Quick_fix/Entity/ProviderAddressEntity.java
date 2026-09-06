@@ -47,4 +47,10 @@ public class ProviderAddressEntity {
 
     @Column(name = "IS_PRIMARY")
     private Boolean primary;
+    
+    private Double latitude;
+    
+    private Double longitude;
+    
+    private String uniqueId;
 }

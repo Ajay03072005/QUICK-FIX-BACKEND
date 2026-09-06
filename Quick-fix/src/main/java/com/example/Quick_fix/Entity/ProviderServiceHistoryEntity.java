@@ -52,5 +52,7 @@ public class ProviderServiceHistoryEntity {
 
     @Column(name = "UPDATED_DATE")
     private LocalDateTime updatedDate;
+    
+    private String uniqueId;
 
 }

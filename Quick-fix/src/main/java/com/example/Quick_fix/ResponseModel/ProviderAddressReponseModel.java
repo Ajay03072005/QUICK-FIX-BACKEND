@@ -20,4 +20,6 @@ public class ProviderAddressReponseModel {
     private String postalCode;
 
     private Boolean primary;
+    
+    private String uniqueId;
 }

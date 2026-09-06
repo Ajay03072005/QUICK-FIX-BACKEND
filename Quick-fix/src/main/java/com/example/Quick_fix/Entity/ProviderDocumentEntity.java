@@ -54,6 +54,8 @@ public class ProviderDocumentEntity {
 
     @Column(name = "STATUS")
     private String status;
+    
+    private String uniqueId;
 
 
 }
