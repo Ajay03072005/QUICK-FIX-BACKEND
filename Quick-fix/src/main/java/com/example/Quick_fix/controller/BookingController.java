@@ -80,4 +80,25 @@ public class BookingController {
 
 		return ResponseEntity.noContent().build();
 	}
+
+	// START SERVICE
+	@PutMapping("/{bookingUniqueId}/start")
+	public ResponseEntity<BookingResponseModel> startBooking(@PathVariable String bookingUniqueId) {
+
+		return ResponseEntity.ok(bookingService.startBooking(bookingUniqueId));
+	}
+
+	// COMPLETE SERVICE
+	@PutMapping("/{bookingUniqueId}/complete")
+	public ResponseEntity<BookingResponseModel> completeBooking(@PathVariable String bookingUniqueId) {
+
+		return ResponseEntity.ok(bookingService.completeBooking(bookingUniqueId));
+	}
+
+	// PROVIDER CANCEL
+	@PutMapping("/{bookingUniqueId}/provider-cancel")
+	public ResponseEntity<BookingResponseModel> providerCancelBooking(@PathVariable String bookingUniqueId) {
+
+		return ResponseEntity.ok(bookingService.providerCancelBooking(bookingUniqueId));
+	}
 }

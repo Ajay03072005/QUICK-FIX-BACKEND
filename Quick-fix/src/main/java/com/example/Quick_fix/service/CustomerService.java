@@ -1,5 +1,6 @@
 package com.example.Quick_fix.service;
 
+import java.lang.classfile.attribute.ConstantValueAttribute;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -229,7 +230,7 @@ public class CustomerService {
 		contact.setContactValue(request.getContactValue());
 		contact.setPrimaryContact(request.isPrimaryContact());
 		contact.setVerified(request.isVerified());
-
+		contact.setUniqueId(commons.generateUniqueId());
 		contact = customerContactRepository.save(contact);
 
 		return mapContactResponse(contact);
@@ -340,7 +341,7 @@ public class CustomerService {
 		response.setContactValue(contact.getContactValue());
 		response.setPrimaryContact(contact.isPrimaryContact());
 		response.setVerified(contact.isVerified());
-
+		response.setUniqueId(contact.getUniqueId());
 		return response;
 	}
 }

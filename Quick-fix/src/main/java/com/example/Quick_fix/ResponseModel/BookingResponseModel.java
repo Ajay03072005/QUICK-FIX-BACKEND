@@ -11,33 +11,42 @@ import lombok.Data;
 @Data
 public class BookingResponseModel {
 
-    private String uniqueId;
+	private String uniqueId;
 
-    private String customerUniqueId;
+	private String customerUniqueId;
 
-    private String serviceUniqueId;
+	private String serviceUniqueId;
 
-    private String providerUniqueId;
+	private String providerUniqueId;
 
-    private String addressUniqueId;
+	private String addressUniqueId;
 
-    private String recipientName;
+	private String recipientName;
 
-    private String recipientPhone;
+	private String recipientPhone;
 
-    private LocalDate bookingDate;
+	private LocalDate bookingDate;
 
-    private LocalTime bookingTime;
+	private LocalTime bookingTime;
 
-    private Double distance;
+	private Double distance;
 
-    private Double servicePrice;
+	private Double servicePrice;
 
-    private Double distanceCharge;
+	private Double distanceCharge;
 
-    private Double totalAmount;
+	private Double totalAmount;
 
-    private BookingStatus status;
+	private BookingStatus status;
 
-    private PaymentStatus paymentStatus;
+	private PaymentStatus paymentStatus;
+
+	private String addressLine1;
+	private String addressLine2;
+	private String city;
+	private String state;
+	private String country;
+	private String postalCode;
+	private Double latitude;
+	private Double longitude;
 }

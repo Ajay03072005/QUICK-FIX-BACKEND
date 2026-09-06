@@ -34,8 +34,8 @@ public class ServiceBookingEntity extends BaseEntity {
 	private ProviderEntity provider;
 
 	@ManyToOne
-	@JoinColumn(name = "address_id", nullable = false)
-	private CustomerAddressEntity address;
+	@JoinColumn(name = "BOOKING_ADDRESS_ID", nullable = false)
+	private BookingAddressEntity bookingAddress;
 
 	@Column(nullable = false)
 	private LocalDate bookingDate;
