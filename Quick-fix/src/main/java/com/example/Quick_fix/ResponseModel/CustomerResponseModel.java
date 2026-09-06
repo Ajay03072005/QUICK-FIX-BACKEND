@@ -22,6 +22,8 @@ public class CustomerResponseModel {
     private Gender gender;
 
     private CustomerStatus status;
+    
+    private String phoneNumber;
 
     private LocalDate dateOfBirth;
 

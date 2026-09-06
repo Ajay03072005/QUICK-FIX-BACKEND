@@ -12,8 +12,12 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Data;
 
 @Entity
+@Data
+@Table(name = "CUSTOMER_DETAIL")
 public class CustomerEntity extends BaseEntity {
 
 	@Id
@@ -22,7 +26,7 @@ public class CustomerEntity extends BaseEntity {
 
 	@Column(nullable = false)
 	private String firstName;
-
+	
 	private String lastName;
 
 	@Column(unique = true)

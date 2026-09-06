@@ -12,7 +12,6 @@ import lombok.Setter;
 @Data
 @Getter
 @Setter
-@Builder
 public class CustomerContactResponseModel {
 
     private Long id;
