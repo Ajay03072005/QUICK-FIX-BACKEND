@@ -213,6 +213,11 @@ public class BookingService {
 	public BookingResponseModel selectProvider(String bookingUniqueId, ProviderSuggestionRequestModel request) {
 
 		ServiceBookingEntity booking = getBooking(bookingUniqueId);
+		if (booking.getStatus() != BookingStatus.PENDING
+				&& booking.getStatus() != BookingStatus.PROVIDER_SELECTED
+				&& booking.getStatus() != BookingStatus.WAITING_FOR_PROVIDER) {
+			throw new RuntimeException("Provider can only be changed before acceptance");
+		}
 
 		ProviderEntity provider = providerRepository.findByUniqueId(request.getProviderUniqueId())
 				.orElseThrow(() -> new RuntimeException("Provider not found"));
@@ -289,8 +294,10 @@ public class BookingService {
 
 		ServiceBookingEntity booking = getBooking(bookingUniqueId);
 
-		if (booking.getStatus() != BookingStatus.CONFIRMED) {
-			throw new RuntimeException("Booking cannot be cancelled at this stage");
+		if (booking.getStatus() != BookingStatus.PENDING
+				&& booking.getStatus() != BookingStatus.PROVIDER_SELECTED
+				&& booking.getStatus() != BookingStatus.WAITING_FOR_PROVIDER) {
+			throw new RuntimeException("Bookings can only be cancelled before provider acceptance");
 		}
 
 		booking.setStatus(BookingStatus.CUSTOMER_CANCELLED);
