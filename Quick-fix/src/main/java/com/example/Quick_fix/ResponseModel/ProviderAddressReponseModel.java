@@ -22,4 +22,8 @@ public class ProviderAddressReponseModel {
     private Boolean primary;
     
     private String uniqueId;
+
+    private Double latitude;
+
+    private Double longitude;
 }

@@ -67,6 +67,10 @@ public class BookingService {
 					.findByUniqueId(request.getAddressUniqueId())
 					.orElseThrow(() -> new RuntimeException("Address not found"));
 
+			if (!customerAddress.getCustomer().getId().equals(customer.getId())) {
+				throw new RuntimeException("Address does not belong to this customer");
+			}
+
 			bookingAddress = new BookingAddressEntity();
 
 			bookingAddress.setUniqueId(generateUniqueId());
@@ -253,8 +257,6 @@ public class BookingService {
 			throw new RuntimeException("No provider selected for this booking");
 		}
 
-		booking.setStatus(BookingStatus.PROVIDER_ACCEPTED);
-
 		booking.setStatus(BookingStatus.CONFIRMED);
 
 		booking = bookingRepository.save(booking);
@@ -305,6 +307,18 @@ public class BookingService {
 	public BookingResponseModel getBookingResponse(String bookingUniqueId) {
 
 		return mapBookingResponse(getBooking(bookingUniqueId));
+	}
+
+	public List<BookingResponseModel> getAllBookings() {
+		return bookingRepository.findAll().stream().map(this::mapBookingResponse).toList();
+	}
+
+	public List<BookingResponseModel> getCustomerBookings(String customerUniqueId) {
+		return bookingRepository.findByCustomer_UniqueId(customerUniqueId).stream().map(this::mapBookingResponse).toList();
+	}
+
+	public List<BookingResponseModel> getProviderBookings(String providerUniqueId) {
+		return bookingRepository.findByProvider_UniqueId(providerUniqueId).stream().map(this::mapBookingResponse).toList();
 	}
 
 	// ---------------------------------------------------------
@@ -407,9 +421,12 @@ public class BookingService {
 		response.setCustomerUniqueId(booking.getCustomer().getUniqueId());
 
 		response.setServiceUniqueId(booking.getService().getUniqueId());
+		response.setServiceName(booking.getService().getServiceType().name());
+		response.setCustomerName(booking.getCustomer().getFirstName() + " " + booking.getCustomer().getLastName());
 
 		if (booking.getProvider() != null) {
 			response.setProviderUniqueId(booking.getProvider().getUniqueId());
+			response.setProviderName(booking.getProvider().getName());
 		}
 
 		response.setAddressLine1(booking.getBookingAddress().getAddressLine1());

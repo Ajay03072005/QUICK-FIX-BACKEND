@@ -110,6 +110,7 @@ public class CustomerService {
 		CustomerEntity customer = new CustomerEntity();
 		customer.setStatus(CustomerStatus.ACTIVE);
 		customer.setFirstName(request.getFirstName());
+		customer.setPhoneNumber(request.getPhoneNumber());
 		customer.setDateOfBirth(request.getDateOfBirth());
 		customer.setGender(request.getGender());
 		customer.setLastName(request.getLastName());
@@ -134,7 +135,9 @@ public class CustomerService {
 		}
 		auth.setLastLoginAt(LocalDateTime.now());
 		auth = customerAuthRepository.save(auth);
-		return mapAuthResponse(auth);
+		CustomerAuthResponseModel response = mapAuthResponse(auth);
+		response.setToken(java.util.UUID.randomUUID().toString());
+		return response;
 	}
 
 	// =========================================================
@@ -287,6 +290,7 @@ public class CustomerService {
 		CustomerResponseModel response = new CustomerResponseModel();
 
 		response.setId(customer.getId());
+		response.setUniqueId(customer.getUniqueId());
 		response.setFirstName(customer.getFirstName());
 		response.setLastName(customer.getLastName());
 		response.setPhoneNumber(customer.getPhoneNumber());
@@ -304,9 +308,11 @@ public class CustomerService {
 
 		response.setId(auth.getId());
 		response.setCustomerId(auth.getCustomer().getId());
+		response.setCustomerUniqueId(auth.getCustomer().getUniqueId());
 		response.setEmail(auth.getEmail());
 		response.setEmailVerified(auth.isEmailVerified());
 		response.setLastLoginAt(auth.getLastLoginAt());
+		response.setToken(java.util.UUID.randomUUID().toString());
 
 		return response;
 	}
@@ -326,6 +332,7 @@ public class CustomerService {
 		response.setPostalCode(address.getPostalCode());
 		response.setLatitude(address.getLatitude());
 		response.setLongitude(address.getLongitude());
+		response.setUniqueId(address.getUniqueId());
 		response.setDefaultAddress(address.isDefaultAddress());
 
 		return response;

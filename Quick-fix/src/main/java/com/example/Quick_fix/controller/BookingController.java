@@ -72,6 +72,21 @@ public class BookingController {
 		return ResponseEntity.ok(bookingService.getBookingResponse(bookingUniqueId));
 	}
 
+	@GetMapping
+	public ResponseEntity<List<BookingResponseModel>> getAllBookings() {
+		return ResponseEntity.ok(bookingService.getAllBookings());
+	}
+
+	@GetMapping("/customer/{customerUniqueId}")
+	public ResponseEntity<List<BookingResponseModel>> getCustomerBookings(@PathVariable String customerUniqueId) {
+		return ResponseEntity.ok(bookingService.getCustomerBookings(customerUniqueId));
+	}
+
+	@GetMapping("/provider/{providerUniqueId}")
+	public ResponseEntity<List<BookingResponseModel>> getProviderBookings(@PathVariable String providerUniqueId) {
+		return ResponseEntity.ok(bookingService.getProviderBookings(providerUniqueId));
+	}
+
 	// DELETE BOOKING
 	@DeleteMapping("/{bookingUniqueId}")
 	public ResponseEntity<Void> deleteBooking(@PathVariable String bookingUniqueId) {

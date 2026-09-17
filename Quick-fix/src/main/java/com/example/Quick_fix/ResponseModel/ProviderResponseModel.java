@@ -12,11 +12,17 @@ import lombok.Data;
 
 @Data
 public class ProviderResponseModel {
+    private Integer id;
+
+    private String uniqueId;
+
 	private String name;
 
     private String phoneNumber;
 
     private String email;
+
+    private String availabilityStatus;
 
     private List<ProviderServiceHistoryReponseModel> providerServices;
 

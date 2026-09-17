@@ -27,6 +27,8 @@ public class ProviderEntity {
     private String phoneNumber;
 
     private String email;
+
+	private String availabilityStatus = "AVAILABLE_NOW";
     @OneToMany(
     	    mappedBy = "provider",
     	    cascade = CascadeType.ALL,

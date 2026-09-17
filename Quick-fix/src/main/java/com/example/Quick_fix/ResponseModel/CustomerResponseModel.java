@@ -10,6 +10,7 @@ import lombok.Data;
 
 @Data
 public class CustomerResponseModel {
+    private String uniqueId;
 
     private Long id;
 
@@ -25,8 +26,6 @@ public class CustomerResponseModel {
     
     private String phoneNumber;
     
-    private String uniqueId;
-
     private LocalDate dateOfBirth;
 
     private LocalDateTime createdAt;

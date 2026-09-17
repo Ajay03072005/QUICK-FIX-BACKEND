@@ -12,9 +12,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.Quick_fix.ResponseModel.ProviderAuthResponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderResponseModel;
+import com.example.Quick_fix.requestModel.ProviderAuthRequestModel;
+import com.example.Quick_fix.requestModel.ProviderRegisterRequestModel;
 import com.example.Quick_fix.requestModel.ProviderRequestModel;
 import com.example.Quick_fix.service.ProviderService;
 
@@ -25,56 +29,68 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ProviderController {
 
-    private final ProviderService providerService;
+	private final ProviderService providerService;
 
-    @PostMapping
-    public ResponseEntity<String> createProvider(
-            @RequestBody ProviderRequestModel request) {
+	@PostMapping
+	public ResponseEntity<String> createProvider(@RequestBody ProviderRequestModel request) {
 
-            
+		return ResponseEntity.status(HttpStatus.CREATED).body(providerService.createProvider(request));
+	}
 
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(providerService.createProvider(request));
-    }
-    @GetMapping("/{id}")
-    public ResponseEntity<ProviderResponseModel> getProviderById(
-            @PathVariable Integer id) {
+	@PostMapping("/auth/register")
+	public ResponseEntity<ProviderAuthResponseModel> registerProvider(@RequestBody ProviderRegisterRequestModel request) {
+		return ResponseEntity.status(HttpStatus.CREATED).body(providerService.registerProvider(request));
+	}
 
-        ProviderResponseModel response =
-                providerService.getProviderById(id);
+	@PostMapping("/auth/login")
+	public ResponseEntity<ProviderAuthResponseModel> loginProvider(@RequestBody ProviderAuthRequestModel request) {
+		return ResponseEntity.ok(providerService.loginProvider(request));
+	}
 
-        return ResponseEntity.ok(response);
-    }
+	@GetMapping("/{id}")
+	public ResponseEntity<ProviderResponseModel> getProviderById(@PathVariable Integer id) {
 
-    @GetMapping
-    public ResponseEntity<List<ProviderResponseModel>> getAllProviders() {
+		ProviderResponseModel response = providerService.getProviderById(id);
 
-        List<ProviderResponseModel> response =
-                providerService.getAllProviders();
+		return ResponseEntity.ok(response);
+	}
 
-        return ResponseEntity.ok(response);
-    }
+	@GetMapping("/unique/{uniqueId}")
+	public ResponseEntity<ProviderResponseModel> getProviderByUniqueId(@PathVariable String uniqueId) {
+		return ResponseEntity.ok(providerService.getProviderByUniqueId(uniqueId));
+	}
 
-    @PutMapping("/{id}")
-    public ResponseEntity<ProviderResponseModel> updateProvider(
-            @PathVariable Integer id,
-            @RequestBody ProviderRequestModel request) {
+	@GetMapping
+	public ResponseEntity<List<ProviderResponseModel>> getAllProviders() {
+		List<ProviderResponseModel> response = providerService.getAllProviders();
+		return ResponseEntity.ok(response);
+	}
 
-        ProviderResponseModel response =
-                providerService.updateProvider(id, request);
+	@PutMapping("/unique/{uniqueId}/availability")
+	public ResponseEntity<ProviderResponseModel> updateAvailability(@PathVariable String uniqueId,
+			@RequestParam String status) {
+		return ResponseEntity.ok(providerService.updateAvailability(uniqueId, status));
+	}
 
-        return ResponseEntity.ok(response);
-    }
+	@PutMapping("/{id}/availability")
+	public ResponseEntity<ProviderResponseModel> updateAvailability(@PathVariable Integer id,
+			@RequestParam String status) {
+		return ResponseEntity.ok(providerService.updateAvailability(id, status));
+	}
+	@PutMapping("/{id}")
+	public ResponseEntity<ProviderResponseModel> updateProvider(@PathVariable Integer id,
+			@RequestBody ProviderRequestModel request) {
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<String> deleteProvider(
-            @PathVariable Integer id) {
+		ProviderResponseModel response = providerService.updateProvider(id, request);
 
-        String response =
-                providerService.deleteProvider(id);
+		return ResponseEntity.ok(response);
+	}
 
-        return ResponseEntity.ok(response);
-    }
+	@DeleteMapping("/{id}")
+	public ResponseEntity<String> deleteProvider(@PathVariable Integer id) {
+
+		String response = providerService.deleteProvider(id);
+
+		return ResponseEntity.ok(response);
+	}
 }
-

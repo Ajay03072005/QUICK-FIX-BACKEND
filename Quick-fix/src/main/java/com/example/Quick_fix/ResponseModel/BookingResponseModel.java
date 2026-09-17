@@ -17,7 +17,13 @@ public class BookingResponseModel {
 
 	private String serviceUniqueId;
 
+	private String serviceName;
+
 	private String providerUniqueId;
+
+	private String providerName;
+
+	private String customerName;
 
 	private String addressUniqueId;
 

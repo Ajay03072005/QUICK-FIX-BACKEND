@@ -1,27 +1,34 @@
 package com.example.Quick_fix.service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.Quick_fix.Entity.ProviderAddressEntity;
+import com.example.Quick_fix.Entity.ProviderAuthEntity;
 import com.example.Quick_fix.Entity.ProviderContactEntity;
 import com.example.Quick_fix.Entity.ProviderDocumentEntity;
 import com.example.Quick_fix.Entity.ProviderEntity;
 import com.example.Quick_fix.Entity.ProviderServiceHistoryEntity;
 
 import com.example.Quick_fix.ResponseModel.ProviderAddressReponseModel;
+import com.example.Quick_fix.ResponseModel.ProviderAuthResponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderContactResponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderDocumentReponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderResponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderServiceHistoryReponseModel;
 
+import com.example.Quick_fix.repository.ProviderAuthRepository;
 import com.example.Quick_fix.repository.ProviderRepository;
 
 import com.example.Quick_fix.requestModel.ProviderAddressRequestModel;
+import com.example.Quick_fix.requestModel.ProviderAuthRequestModel;
 import com.example.Quick_fix.requestModel.ProviderContactRequestModel;
 import com.example.Quick_fix.requestModel.ProviderDocumentRequestModel;
+import com.example.Quick_fix.requestModel.ProviderRegisterRequestModel;
 import com.example.Quick_fix.requestModel.ProviderRequestModel;
 import com.example.Quick_fix.requestModel.ProviderServiceHistoryRequestModel;
 
@@ -33,6 +40,9 @@ import lombok.RequiredArgsConstructor;
 public class ProviderService {
 
 	private final ProviderRepository providerRepository;
+	private final ProviderAuthRepository providerAuthRepository;
+	private final PasswordEncoder passwordEncoder;
+	private final com.example.Quick_fix.commons.Common commons;
 
 	@Transactional
 	public String createProvider(ProviderRequestModel request) {
@@ -41,6 +51,7 @@ public class ProviderService {
 		providerEntity.setName(request.getName());
 		providerEntity.setPhoneNumber(request.getPhoneNumber());
 		providerEntity.setEmail(request.getEmail());
+		providerEntity.setUniqueId(commons.generateUniqueId());
 
 		List<ProviderAddressEntity> addressEntities = new ArrayList<>();
 
@@ -169,12 +180,59 @@ public class ProviderService {
 	}
 
 	@Transactional
+	public ProviderAuthResponseModel registerProvider(ProviderRegisterRequestModel request) {
+		if (providerAuthRepository.existsByEmail(request.getEmail())) {
+			throw new RuntimeException("Email already registered");
+		}
+
+		ProviderEntity provider = new ProviderEntity();
+		provider.setName(request.getName());
+		provider.setPhoneNumber(request.getPhoneNumber());
+		provider.setEmail(request.getEmail());
+		provider.setUniqueId(commons.generateUniqueId());
+		provider.setAvailabilityStatus("AVAILABLE_NOW");
+		provider = providerRepository.save(provider);
+
+		ProviderAuthEntity auth = new ProviderAuthEntity();
+		auth.setProvider(provider);
+		auth.setEmail(request.getEmail());
+		auth.setPassword(passwordEncoder.encode(request.getPassword()));
+		auth.setLastLoginAt(LocalDateTime.now());
+		providerAuthRepository.save(auth);
+
+		ProviderAuthResponseModel response = mapAuthResponse(auth);
+		response.setToken(java.util.UUID.randomUUID().toString());
+		return response;
+	}
+
+	@Transactional
+	public ProviderAuthResponseModel loginProvider(ProviderAuthRequestModel request) {
+		ProviderAuthEntity auth = providerAuthRepository.findByEmail(request.getEmail())
+				.orElseThrow(() -> new RuntimeException("Invalid email or password"));
+		if (!passwordEncoder.matches(request.getPassword(), auth.getPassword())) {
+			throw new RuntimeException("Invalid email or password");
+		}
+		auth.setLastLoginAt(LocalDateTime.now());
+		providerAuthRepository.save(auth);
+		ProviderAuthResponseModel response = mapAuthResponse(auth);
+		response.setToken(java.util.UUID.randomUUID().toString());
+		return response;
+	}
+
+	@Transactional
 	public ProviderResponseModel getProviderById(Integer id) {
 
 		ProviderEntity providerEntity = providerRepository.findById(id)
 				.orElseThrow(() -> new RuntimeException("Provider not found with id: " + id));
+		ensureProviderIdentity(providerEntity);
 
 		return convertToResponse(providerEntity);
+	}
+
+	@Transactional
+	public ProviderResponseModel getProviderByUniqueId(String uniqueId) {
+		return convertToResponse(providerRepository.findByUniqueId(uniqueId)
+				.orElseThrow(() -> new RuntimeException("Provider not found")));
 	}
 
 	@Transactional
@@ -185,11 +243,29 @@ public class ProviderService {
 		List<ProviderResponseModel> responses = new ArrayList<>();
 
 		for (ProviderEntity provider : providers) {
+			ensureProviderIdentity(provider);
 
 			responses.add(convertToResponse(provider));
 		}
 
 		return responses;
+	}
+
+	@Transactional
+	public ProviderResponseModel updateAvailability(String uniqueId, String status) {
+		ProviderEntity provider = providerRepository.findByUniqueId(uniqueId)
+				.orElseThrow(() -> new RuntimeException("Provider not found"));
+		provider.setAvailabilityStatus(status);
+		return convertToResponse(providerRepository.save(provider));
+	}
+
+	@Transactional
+	public ProviderResponseModel updateAvailability(Integer id, String status) {
+		ProviderEntity provider = providerRepository.findById(id)
+				.orElseThrow(() -> new RuntimeException("Provider not found"));
+		ensureProviderIdentity(provider);
+		provider.setAvailabilityStatus(status);
+		return convertToResponse(providerRepository.save(provider));
 	}
 
 	@Transactional
@@ -342,15 +418,29 @@ public class ProviderService {
 		return "Provider deleted successfully with id: " + id;
 	}
 
+	private ProviderAuthResponseModel mapAuthResponse(ProviderAuthEntity auth) {
+		ProviderAuthResponseModel response = new ProviderAuthResponseModel();
+		response.setId(auth.getId());
+		response.setProviderId(auth.getProvider().getId());
+		response.setProviderUniqueId(auth.getProvider().getUniqueId());
+		response.setEmail(auth.getEmail());
+		response.setLastLoginAt(auth.getLastLoginAt());
+		response.setToken(java.util.UUID.randomUUID().toString());
+		return response;
+	}
+
 	private ProviderResponseModel convertToResponse(ProviderEntity providerEntity) {
 
 		ProviderResponseModel response = new ProviderResponseModel();
+		response.setId(providerEntity.getId());
+		response.setUniqueId(providerEntity.getUniqueId());
 
 		response.setName(providerEntity.getName());
 
 		response.setPhoneNumber(providerEntity.getPhoneNumber());
 
 		response.setEmail(providerEntity.getEmail());
+		response.setAvailabilityStatus(providerEntity.getAvailabilityStatus());
 
 		List<ProviderAddressReponseModel> addressResponses = new ArrayList<>();
 
@@ -375,6 +465,9 @@ public class ProviderService {
 				addressResponse.setPostalCode(addressEntity.getPostalCode());
 
 				addressResponse.setPrimary(addressEntity.getPrimary());
+				addressResponse.setUniqueId(addressEntity.getUniqueId());
+				addressResponse.setLatitude(addressEntity.getLatitude());
+				addressResponse.setLongitude(addressEntity.getLongitude());
 
 				addressResponses.add(addressResponse);
 			}
@@ -469,5 +562,18 @@ public class ProviderService {
 		response.setDocuments(documentResponses);
 
 		return response;
+	}
+
+	private void ensureProviderIdentity(ProviderEntity provider) {
+		boolean changed = false;
+		if (provider.getUniqueId() == null || provider.getUniqueId().isBlank()) {
+			provider.setUniqueId(commons.generateUniqueId());
+			changed = true;
+		}
+		if (provider.getAvailabilityStatus() == null || provider.getAvailabilityStatus().isBlank()) {
+			provider.setAvailabilityStatus("AVAILABLE_NOW");
+			changed = true;
+		}
+		if (changed) providerRepository.save(provider);
 	}
 }
