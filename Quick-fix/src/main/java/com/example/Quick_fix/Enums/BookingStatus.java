@@ -12,6 +12,8 @@ public enum BookingStatus {
 
 	CONFIRMED,
 
+	PROVIDER_EN_ROUTE,
+
 	IN_PROGRESS,
 
 	COMPLETED,
@@ -20,5 +22,7 @@ public enum BookingStatus {
 
 	CUSTOMER_CANCELLED,
 
-	PROVIDER_CANCELLED
+	PROVIDER_CANCELLED,
+
+	DISPUTED
 }

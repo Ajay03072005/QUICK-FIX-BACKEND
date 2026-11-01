@@ -1,6 +1,5 @@
 package com.example.Quick_fix.service;
 
-import java.lang.classfile.attribute.ConstantValueAttribute;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -40,6 +39,7 @@ public class CustomerService {
 	private final CustomerAddressRepository customerAddressRepository;
 	private final CustomerContactRepository customerContactRepository;
 	private final PasswordEncoder passwordEncoder;
+	private final com.example.Quick_fix.config.JwtTokenProvider jwtTokenProvider;
 	private final Common commons;
 	
 
@@ -136,7 +136,8 @@ public class CustomerService {
 		auth.setLastLoginAt(LocalDateTime.now());
 		auth = customerAuthRepository.save(auth);
 		CustomerAuthResponseModel response = mapAuthResponse(auth);
-		response.setToken(java.util.UUID.randomUUID().toString());
+		String token = jwtTokenProvider.generateToken(auth.getEmail(), "CUSTOMER", auth.getCustomer().getUniqueId(), auth.getCustomer().getUniqueId());
+		response.setToken(token);
 		return response;
 	}
 

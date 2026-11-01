@@ -116,4 +116,9 @@ public class BookingController {
 
 		return ResponseEntity.ok(bookingService.providerCancelBooking(bookingUniqueId));
 	}
+
+	@PutMapping("/{bookingUniqueId}/en-route")
+	public ResponseEntity<BookingResponseModel> markEnRoute(@PathVariable String bookingUniqueId) {
+		return ResponseEntity.ok(bookingService.markEnRoute(bookingUniqueId));
+	}
 }

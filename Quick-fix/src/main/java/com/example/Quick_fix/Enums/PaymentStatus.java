@@ -1,6 +1,12 @@
 package com.example.Quick_fix.Enums;
 
 public enum PaymentStatus {
-
-	PENDING, PAID, FAILED, REFUNDED
+	CREATED,
+	PENDING,
+	SUCCESS,
+	PAID,
+	FAILED,
+	REFUND_PENDING,
+	REFUNDED,
+	PARTIALLY_REFUNDED
 }

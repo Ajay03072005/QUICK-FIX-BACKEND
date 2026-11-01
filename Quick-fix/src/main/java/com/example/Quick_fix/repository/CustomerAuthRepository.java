@@ -12,5 +12,7 @@ public interface CustomerAuthRepository extends JpaRepository<CustomerAuthEntity
 
 	Optional<CustomerAuthEntity> findByEmail(String email);
 
+	Optional<CustomerAuthEntity> findByCustomer_UniqueId(String customerUniqueId);
+
 	boolean existsByEmail(String email);
 }

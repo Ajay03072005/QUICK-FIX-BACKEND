@@ -17,9 +17,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.Quick_fix.ResponseModel.ProviderAuthResponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderResponseModel;
+import com.example.Quick_fix.ResponseModel.ProviderAddressReponseModel;
+import com.example.Quick_fix.ResponseModel.ProviderServiceHistoryReponseModel;
 import com.example.Quick_fix.requestModel.ProviderAuthRequestModel;
 import com.example.Quick_fix.requestModel.ProviderRegisterRequestModel;
 import com.example.Quick_fix.requestModel.ProviderRequestModel;
+import com.example.Quick_fix.requestModel.ProviderAddressRequestModel;
+import com.example.Quick_fix.requestModel.ProviderServiceHistoryRequestModel;
 import com.example.Quick_fix.service.ProviderService;
 
 import lombok.RequiredArgsConstructor;
@@ -60,6 +64,18 @@ public class ProviderController {
 		return ResponseEntity.ok(providerService.getProviderByUniqueId(uniqueId));
 	}
 
+	@PutMapping("/unique/{uniqueId}/address")
+	public ResponseEntity<ProviderAddressReponseModel> savePrimaryAddress(@PathVariable String uniqueId,
+			@RequestBody ProviderAddressRequestModel request) {
+		return ResponseEntity.ok(providerService.savePrimaryAddress(uniqueId, request));
+	}
+
+	@PostMapping("/unique/{uniqueId}/services")
+	public ResponseEntity<ProviderServiceHistoryReponseModel> addProviderService(@PathVariable String uniqueId,
+			@RequestBody ProviderServiceHistoryRequestModel request) {
+		return ResponseEntity.ok(providerService.addProviderService(uniqueId, request));
+	}
+
 	@GetMapping
 	public ResponseEntity<List<ProviderResponseModel>> getAllProviders() {
 		List<ProviderResponseModel> response = providerService.getAllProviders();
@@ -76,6 +92,24 @@ public class ProviderController {
 	public ResponseEntity<ProviderResponseModel> updateAvailability(@PathVariable Integer id,
 			@RequestParam String status) {
 		return ResponseEntity.ok(providerService.updateAvailability(id, status));
+	}
+
+	@GetMapping("/unique/{uniqueId}/schedule")
+	public ResponseEntity<List<com.example.Quick_fix.ResponseModel.ProviderAvailabilityResponseModel>> getSchedule(@PathVariable String uniqueId) {
+		return ResponseEntity.ok(providerService.getProviderAvailability(uniqueId));
+	}
+
+	@PostMapping("/unique/{uniqueId}/schedule")
+	public ResponseEntity<List<com.example.Quick_fix.ResponseModel.ProviderAvailabilityResponseModel>> saveSchedule(
+			@PathVariable String uniqueId,
+			@RequestBody List<com.example.Quick_fix.requestModel.ProviderAvailabilityRequestModel> requests) {
+		return ResponseEntity.ok(providerService.saveProviderAvailability(uniqueId, requests));
+	}
+
+	@PutMapping("/documents/{documentId}/status")
+	public ResponseEntity<String> updateDocumentStatus(@PathVariable Long documentId, @RequestParam String status) {
+		providerService.updateDocumentStatus(documentId, status);
+		return ResponseEntity.ok("Document status updated to " + status);
 	}
 	@PutMapping("/{id}")
 	public ResponseEntity<ProviderResponseModel> updateProvider(@PathVariable Integer id,

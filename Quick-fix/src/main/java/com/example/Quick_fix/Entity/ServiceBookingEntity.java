@@ -68,4 +68,7 @@ public class ServiceBookingEntity extends BaseEntity {
 
 	@Column(name = "RECIPIENT_PHONE", nullable = false)
 	private String recipientPhone;
+
+	@Version
+	private Long version;
 }

@@ -1,7 +1,10 @@
 package com.example.Quick_fix.service;
 
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.springframework.stereotype.Service;
@@ -44,6 +47,7 @@ public class BookingService {
 	private final ProviderAddressRepository providerAddressRepository;
 	private final ProviderServiceHistoryRepository providerServiceHistoryRepository;
 	private final BookingAddressRepository bookingAddressRepository;
+	private final FinanceService financeService;
 
 	// ---------------------------------------------------------
 	// CREATE BOOKING REQUEST
@@ -155,6 +159,7 @@ public class BookingService {
 	// FIND NEARBY PROVIDERS
 	// ---------------------------------------------------------
 
+	@Transactional
 	public List<ProviderSuggestionResponseModel> findProviders(String bookingUniqueId) {
 
 		ServiceBookingEntity booking = getBooking(bookingUniqueId);
@@ -164,7 +169,16 @@ public class BookingService {
 		List<ProviderServiceHistoryEntity> providers = providerServiceHistoryRepository
 				.findByServiceAndStatus(service.getServiceType(), "ACTIVE");
 
+		List<String> providerIds = providers.stream()
+				.map(history -> history.getProvider().getUniqueId())
+				.distinct()
+				.toList();
+		Map<String, ProviderAddressEntity> primaryAddresses = providerIds.isEmpty() ? Map.of()
+				: providerAddressRepository.findPrimaryAddressesByProviderIds(providerIds).stream()
+						.collect(Collectors.toMap(address -> address.getProvider().getUniqueId(), Function.identity(), (first, ignored) -> first));
+
 		List<ProviderSuggestionResponseModel> result = new ArrayList<>();
+	java.util.Set<String> addedProviderIds = new java.util.HashSet<>();
 
 		Double customerLatitude = booking.getBookingAddress().getLatitude();
 
@@ -173,9 +187,9 @@ public class BookingService {
 		for (ProviderServiceHistoryEntity history : providers) {
 
 			ProviderEntity provider = history.getProvider();
+			if (!addedProviderIds.add(provider.getUniqueId())) continue;
 
-			ProviderAddressEntity providerAddress = providerAddressRepository
-					.findByProvider_UniqueIdAndPrimary(provider.getUniqueId(), true).orElseThrow();
+			ProviderAddressEntity providerAddress = primaryAddresses.get(provider.getUniqueId());
 
 			if (providerAddress == null || providerAddress.getLatitude() == null
 					|| providerAddress.getLongitude() == null) {
@@ -503,6 +517,7 @@ public class BookingService {
 		}
 
 		booking.setStatus(BookingStatus.COMPLETED);
+		financeService.calculateAndRecordEarning(booking);
 
 		booking = bookingRepository.save(booking);
 
@@ -527,6 +542,14 @@ public class BookingService {
 
 		booking = bookingRepository.save(booking);
 
+		return mapBookingResponse(booking);
+	}
+
+	@Transactional
+	public BookingResponseModel markEnRoute(String bookingUniqueId) {
+		ServiceBookingEntity booking = getBooking(bookingUniqueId);
+		booking.setStatus(BookingStatus.PROVIDER_EN_ROUTE);
+		booking = bookingRepository.save(booking);
 		return mapBookingResponse(booking);
 	}
 }

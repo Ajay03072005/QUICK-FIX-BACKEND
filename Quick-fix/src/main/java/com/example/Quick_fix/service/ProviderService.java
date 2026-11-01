@@ -15,6 +15,7 @@ import com.example.Quick_fix.Entity.ProviderEntity;
 import com.example.Quick_fix.Entity.ProviderServiceHistoryEntity;
 
 import com.example.Quick_fix.ResponseModel.ProviderAddressReponseModel;
+import com.example.Quick_fix.ResponseModel.ProviderServiceHistoryReponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderAuthResponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderContactResponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderDocumentReponseModel;
@@ -22,6 +23,8 @@ import com.example.Quick_fix.ResponseModel.ProviderResponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderServiceHistoryReponseModel;
 
 import com.example.Quick_fix.repository.ProviderAuthRepository;
+import com.example.Quick_fix.repository.ProviderAddressRepository;
+import com.example.Quick_fix.repository.ProviderServiceHistoryRepository;
 import com.example.Quick_fix.repository.ProviderRepository;
 
 import com.example.Quick_fix.requestModel.ProviderAddressRequestModel;
@@ -41,8 +44,88 @@ public class ProviderService {
 
 	private final ProviderRepository providerRepository;
 	private final ProviderAuthRepository providerAuthRepository;
+	private final ProviderAddressRepository providerAddressRepository;
+	private final ProviderServiceHistoryRepository providerServiceHistoryRepository;
+	private final com.example.Quick_fix.repository.ProviderAvailabilityRepository providerAvailabilityRepository;
+	private final com.example.Quick_fix.repository.ProviderDocumentRepository providerDocumentRepository;
 	private final PasswordEncoder passwordEncoder;
+	private final com.example.Quick_fix.config.JwtTokenProvider jwtTokenProvider;
 	private final com.example.Quick_fix.commons.Common commons;
+
+	@Transactional
+	public ProviderServiceHistoryReponseModel addProviderService(String providerUniqueId, ProviderServiceHistoryRequestModel request) {
+		ProviderEntity provider = providerRepository.findByUniqueId(providerUniqueId)
+				.orElseThrow(() -> new RuntimeException("Provider not found"));
+		boolean alreadyActive = providerServiceHistoryRepository
+				.findByProvider_UniqueIdAndService(providerUniqueId, request.getService()).stream()
+				.anyMatch(history -> "ACTIVE".equalsIgnoreCase(history.getStatus()));
+		if (alreadyActive) throw new IllegalArgumentException("This service is already in your catalog");
+
+		java.time.LocalDateTime now = java.time.LocalDateTime.now();
+		ProviderServiceHistoryEntity history = new ProviderServiceHistoryEntity();
+		history.setProvider(provider);
+		history.setService(request.getService());
+		history.setStartDate(request.getStartDate() == null ? java.time.LocalDate.now() : request.getStartDate());
+		history.setEndDate(request.getEndDate());
+		history.setStatus("ACTIVE");
+		history.setNotes(request.getNotes());
+		history.setCreatedDate(now);
+		history.setUpdatedDate(now);
+		history.setUniqueId(commons.generateUniqueId());
+		history = providerServiceHistoryRepository.save(history);
+
+		ProviderServiceHistoryReponseModel response = new ProviderServiceHistoryReponseModel();
+		response.setService(history.getService());
+		response.setStartDate(history.getStartDate());
+		response.setEndDate(history.getEndDate());
+		response.setStatus(history.getStatus());
+		response.setNotes(history.getNotes());
+		response.setUniqueId(history.getUniqueId());
+		response.setCreatedDate(history.getCreatedDate());
+		response.setUpdatedDate(history.getUpdatedDate());
+		return response;
+	}
+
+	@Transactional
+	public ProviderAddressReponseModel savePrimaryAddress(String providerUniqueId, ProviderAddressRequestModel request) {
+		if (request.getLatitude() == null || request.getLongitude() == null) {
+			throw new IllegalArgumentException("Latitude and longitude are required for nearby provider matching");
+		}
+
+		ProviderEntity provider = providerRepository.findByUniqueId(providerUniqueId)
+				.orElseThrow(() -> new RuntimeException("Provider not found"));
+		ProviderAddressEntity address = providerAddressRepository
+				.findByProvider_UniqueIdAndPrimary(providerUniqueId, true)
+				.orElseGet(ProviderAddressEntity::new);
+
+		address.setProvider(provider);
+		address.setAddressType(request.getAddressType());
+		address.setAddressLine1(request.getAddressLine1());
+		address.setAddressLine2(request.getAddressLine2());
+		address.setCity(request.getCity());
+		address.setState(request.getState());
+		address.setCountry(request.getCountry());
+		address.setPostalCode(request.getPostalCode());
+		address.setLatitude(request.getLatitude());
+		address.setLongitude(request.getLongitude());
+		address.setPrimary(true);
+		if (address.getUniqueId() == null) address.setUniqueId(commons.generateUniqueId());
+		address = providerAddressRepository.save(address);
+
+		ProviderAddressReponseModel response = new ProviderAddressReponseModel();
+		response.setUniqueId(address.getUniqueId());
+		response.setAddressType(address.getAddressType());
+		response.setAddressLine1(address.getAddressLine1());
+		response.setAddressLine2(address.getAddressLine2());
+		response.setCity(address.getCity());
+		response.setState(address.getState());
+		response.setCountry(address.getCountry());
+		response.setPostalCode(address.getPostalCode());
+		response.setPrimary(address.getPrimary());
+		response.setLatitude(address.getLatitude());
+		response.setLongitude(address.getLongitude());
+		return response;
+	}
 
 	@Transactional
 	public String createProvider(ProviderRequestModel request) {
@@ -201,7 +284,8 @@ public class ProviderService {
 		providerAuthRepository.save(auth);
 
 		ProviderAuthResponseModel response = mapAuthResponse(auth);
-		response.setToken(java.util.UUID.randomUUID().toString());
+		String token = jwtTokenProvider.generateToken(auth.getEmail(), "PROVIDER", provider.getUniqueId(), String.valueOf(provider.getId()));
+		response.setToken(token);
 		return response;
 	}
 
@@ -215,7 +299,8 @@ public class ProviderService {
 		auth.setLastLoginAt(LocalDateTime.now());
 		providerAuthRepository.save(auth);
 		ProviderAuthResponseModel response = mapAuthResponse(auth);
-		response.setToken(java.util.UUID.randomUUID().toString());
+		String token = jwtTokenProvider.generateToken(auth.getEmail(), "PROVIDER", auth.getProvider().getUniqueId(), String.valueOf(auth.getProvider().getId()));
+		response.setToken(token);
 		return response;
 	}
 
@@ -266,6 +351,51 @@ public class ProviderService {
 		ensureProviderIdentity(provider);
 		provider.setAvailabilityStatus(status);
 		return convertToResponse(providerRepository.save(provider));
+	}
+
+	@Transactional
+	public List<com.example.Quick_fix.ResponseModel.ProviderAvailabilityResponseModel> getProviderAvailability(String uniqueId) {
+		ProviderEntity provider = providerRepository.findByUniqueId(uniqueId)
+				.orElseThrow(() -> new RuntimeException("Provider not found"));
+		List<com.example.Quick_fix.Entity.ProviderAvailabilityEntity> list = providerAvailabilityRepository.findByProviderId(provider.getId());
+		return list.stream().map(avail -> new com.example.Quick_fix.ResponseModel.ProviderAvailabilityResponseModel(
+				avail.getId(), avail.getWeekday(), avail.getStartTime(), avail.getEndTime(), avail.isWorkingDay()
+		)).toList();
+	}
+
+	@Transactional
+	public List<com.example.Quick_fix.ResponseModel.ProviderAvailabilityResponseModel> saveProviderAvailability(
+			String uniqueId, List<com.example.Quick_fix.requestModel.ProviderAvailabilityRequestModel> requests) {
+		ProviderEntity provider = providerRepository.findByUniqueId(uniqueId)
+				.orElseThrow(() -> new RuntimeException("Provider not found"));
+
+		providerAvailabilityRepository.deleteByProviderId(provider.getId());
+
+		List<com.example.Quick_fix.Entity.ProviderAvailabilityEntity> entities = new ArrayList<>();
+		if (requests != null) {
+			for (com.example.Quick_fix.requestModel.ProviderAvailabilityRequestModel req : requests) {
+				com.example.Quick_fix.Entity.ProviderAvailabilityEntity entity = new com.example.Quick_fix.Entity.ProviderAvailabilityEntity();
+				entity.setProvider(provider);
+				entity.setWeekday(req.getWeekday());
+				entity.setStartTime(req.getStartTime());
+				entity.setEndTime(req.getEndTime());
+				entity.setWorkingDay(req.isWorkingDay());
+				entities.add(entity);
+			}
+		}
+
+		List<com.example.Quick_fix.Entity.ProviderAvailabilityEntity> saved = providerAvailabilityRepository.saveAll(entities);
+		return saved.stream().map(avail -> new com.example.Quick_fix.ResponseModel.ProviderAvailabilityResponseModel(
+				avail.getId(), avail.getWeekday(), avail.getStartTime(), avail.getEndTime(), avail.isWorkingDay()
+		)).toList();
+	}
+
+	@Transactional
+	public void updateDocumentStatus(Long documentId, String status) {
+		ProviderDocumentEntity doc = providerDocumentRepository.findById(documentId)
+				.orElseThrow(() -> new RuntimeException("Document not found"));
+		doc.setStatus(status);
+		providerDocumentRepository.save(doc);
 	}
 
 	@Transactional

@@ -19,5 +19,9 @@ public class ProviderAddressRequestModel {
 
     private String postalCode;
 
+    private Double latitude;
+
+    private Double longitude;
+
     private Boolean primary;
 }

@@ -6,6 +6,6 @@ import org.springframework.stereotype.Repository;
 import com.example.Quick_fix.Entity.ProviderDocumentEntity;
 
 @Repository
-public interface ProviderDocumentRepository extends JpaRepository<ProviderDocumentEntity,Integer >{
+public interface ProviderDocumentRepository extends JpaRepository<ProviderDocumentEntity, Long> {
 
 }
