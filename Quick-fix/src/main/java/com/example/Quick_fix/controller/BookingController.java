@@ -36,6 +36,17 @@ public class BookingController {
 		return ResponseEntity.ok(bookingService.findProviders(bookingUniqueId));
 	}
 
+	// FIND NEARBY PROVIDERS BY LOCATION (WITHOUT REQUIRING A BOOKING)
+	@GetMapping("/providers")
+	public ResponseEntity<List<ProviderSuggestionResponseModel>> findProvidersByLocation(
+			@RequestParam String serviceUniqueId,
+			@RequestParam(required = false) Double latitude,
+			@RequestParam(required = false) Double longitude,
+			@RequestParam(required = false) String addressUniqueId) {
+
+		return ResponseEntity.ok(bookingService.findProvidersForServiceAndAddress(serviceUniqueId, latitude, longitude, addressUniqueId));
+	}
+
 	// SELECT PROVIDER
 	@PutMapping("/{bookingUniqueId}/provider")
 	public ResponseEntity<BookingResponseModel> selectProvider(@PathVariable String bookingUniqueId,

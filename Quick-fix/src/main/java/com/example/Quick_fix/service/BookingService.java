@@ -139,17 +139,54 @@ public class BookingService {
 
 		booking.setBookingTime(request.getBookingTime());
 
-		booking.setStatus(BookingStatus.PENDING);
-
 		booking.setPaymentStatus(PaymentStatus.PENDING);
 
-		booking.setServicePrice(service.getServiceCharge());
+		double servicePrice = service.getServiceCharge();
+		double distance = 0.0;
+		double distanceCharge = 0.0;
+		double totalAmount = servicePrice;
 
-		booking.setDistance(0.0);
+		if (request.getProviderUniqueId() != null && !request.getProviderUniqueId().isBlank()) {
+			ProviderEntity provider = providerRepository.findByUniqueId(request.getProviderUniqueId())
+					.orElseThrow(() -> new RuntimeException("Provider not found"));
 
-		booking.setDistanceCharge(0.0);
+			boolean providesService = providerServiceHistoryRepository
+					.findByProvider_UniqueIdAndService(provider.getUniqueId(), service.getServiceType())
+					.stream()
+					.anyMatch(history -> "ACTIVE".equalsIgnoreCase(history.getStatus()));
+			if (!providesService) {
+				throw new IllegalStateException("This provider does not offer the selected service.");
+			}
 
-		booking.setTotalAmount(service.getServiceCharge());
+			if (!"AVAILABLE_NOW".equalsIgnoreCase(provider.getAvailabilityStatus())
+					&& !"AVAILABLE_TODAY".equalsIgnoreCase(provider.getAvailabilityStatus())) {
+				throw new IllegalStateException("This provider is no longer available. Please choose another provider.");
+			}
+
+			ProviderAddressEntity providerAddress = providerAddressRepository
+					.findByProvider_UniqueIdAndPrimary(provider.getUniqueId(), true)
+					.orElseThrow(() -> new RuntimeException("Provider address not found"));
+
+			if (!isValidCoordinate(bookingAddress.getLatitude(), bookingAddress.getLongitude())
+					|| !isValidCoordinate(providerAddress.getLatitude(), providerAddress.getLongitude())) {
+				throw new IllegalStateException("Customer and provider addresses must have valid map coordinates.");
+			}
+
+			distance = calculateDistance(bookingAddress.getLatitude(), bookingAddress.getLongitude(),
+					providerAddress.getLatitude(), providerAddress.getLongitude());
+			distanceCharge = calculateDistanceCharge(distance);
+			totalAmount = servicePrice + distanceCharge;
+
+			booking.setProvider(provider);
+			booking.setStatus(BookingStatus.WAITING_FOR_PROVIDER);
+		} else {
+			booking.setStatus(BookingStatus.DRAFT);
+		}
+
+		booking.setServicePrice(servicePrice);
+		booking.setDistance(distance);
+		booking.setDistanceCharge(distanceCharge);
+		booking.setTotalAmount(totalAmount);
 
 		booking = bookingRepository.save(booking);
 
@@ -162,10 +199,38 @@ public class BookingService {
 
 	@Transactional
 	public List<ProviderSuggestionResponseModel> findProviders(String bookingUniqueId) {
-
 		ServiceBookingEntity booking = getBooking(bookingUniqueId);
+		return findProvidersForLocation(
+				booking.getService().getUniqueId(),
+				booking.getBookingAddress().getLatitude(),
+				booking.getBookingAddress().getLongitude()
+		);
+	}
 
-		ServiceEntity service = booking.getService();
+	@Transactional
+	public List<ProviderSuggestionResponseModel> findProvidersForServiceAndAddress(String serviceUniqueId, Double latitude, Double longitude, String addressUniqueId) {
+		Double targetLatitude = latitude;
+		Double targetLongitude = longitude;
+
+		if ((targetLatitude == null || targetLongitude == null) && addressUniqueId != null && !addressUniqueId.isBlank()) {
+			CustomerAddressEntity customerAddress = customerAddressRepository.findByUniqueId(addressUniqueId)
+					.orElseThrow(() -> new RuntimeException("Address not found"));
+			targetLatitude = customerAddress.getLatitude();
+			targetLongitude = customerAddress.getLongitude();
+		}
+
+		if (targetLatitude == null || targetLongitude == null) {
+			throw new IllegalArgumentException("Customer location coordinates or addressUniqueId are required.");
+		}
+
+		return findProvidersForLocation(serviceUniqueId, targetLatitude, targetLongitude);
+	}
+
+	@Transactional
+	public List<ProviderSuggestionResponseModel> findProvidersForLocation(String serviceUniqueId, Double customerLatitude, Double customerLongitude) {
+
+		ServiceEntity service = serviceRepository.findByUniqueId(serviceUniqueId)
+				.orElseThrow(() -> new RuntimeException("Service not found"));
 
 		List<ProviderServiceHistoryEntity> providers = providerServiceHistoryRepository
 				.findByServiceAndStatus(service.getServiceType(), "ACTIVE");
@@ -179,11 +244,7 @@ public class BookingService {
 						.collect(Collectors.toMap(address -> address.getProvider().getUniqueId(), Function.identity(), (first, ignored) -> first));
 
 		List<ProviderSuggestionResponseModel> result = new ArrayList<>();
-	java.util.Set<String> addedProviderIds = new java.util.HashSet<>();
-
-		Double customerLatitude = booking.getBookingAddress().getLatitude();
-
-		Double customerLongitude = booking.getBookingAddress().getLongitude();
+		java.util.Set<String> addedProviderIds = new java.util.HashSet<>();
 
 		if (!isValidCoordinate(customerLatitude, customerLongitude)) {
 			throw new IllegalStateException("Booking address has invalid map coordinates. Update the customer address and try again.");
@@ -240,7 +301,8 @@ public class BookingService {
 	public BookingResponseModel selectProvider(String bookingUniqueId, ProviderSuggestionRequestModel request) {
 
 		ServiceBookingEntity booking = getBooking(bookingUniqueId);
-		if (booking.getStatus() != BookingStatus.PENDING
+		if (booking.getStatus() != BookingStatus.DRAFT
+				&& booking.getStatus() != BookingStatus.PENDING
 				&& booking.getStatus() != BookingStatus.PROVIDER_SELECTED
 				&& booking.getStatus() != BookingStatus.WAITING_FOR_PROVIDER) {
 			throw new RuntimeException("Provider can only be changed before acceptance");
@@ -338,7 +400,8 @@ public class BookingService {
 
 		ServiceBookingEntity booking = getBooking(bookingUniqueId);
 
-		if (booking.getStatus() != BookingStatus.PENDING
+		if (booking.getStatus() != BookingStatus.DRAFT
+				&& booking.getStatus() != BookingStatus.PENDING
 				&& booking.getStatus() != BookingStatus.PROVIDER_SELECTED
 				&& booking.getStatus() != BookingStatus.WAITING_FOR_PROVIDER) {
 			throw new RuntimeException("Bookings can only be cancelled before provider acceptance");
@@ -361,15 +424,21 @@ public class BookingService {
 	}
 
 	public List<BookingResponseModel> getAllBookings() {
-		return bookingRepository.findAll().stream().map(this::mapBookingResponse).toList();
+		return bookingRepository.findAll().stream()
+				.filter(b -> b.getStatus() != BookingStatus.DRAFT && (b.getProvider() != null || b.getStatus() != BookingStatus.PENDING))
+				.map(this::mapBookingResponse).toList();
 	}
 
 	public List<BookingResponseModel> getCustomerBookings(String customerUniqueId) {
-		return bookingRepository.findByCustomer_UniqueId(customerUniqueId).stream().map(this::mapBookingResponse).toList();
+		return bookingRepository.findByCustomer_UniqueId(customerUniqueId).stream()
+				.filter(b -> b.getStatus() != BookingStatus.DRAFT && (b.getProvider() != null || b.getStatus() != BookingStatus.PENDING))
+				.map(this::mapBookingResponse).toList();
 	}
 
 	public List<BookingResponseModel> getProviderBookings(String providerUniqueId) {
-		return bookingRepository.findByProvider_UniqueId(providerUniqueId).stream().map(this::mapBookingResponse).toList();
+		return bookingRepository.findByProvider_UniqueId(providerUniqueId).stream()
+				.filter(b -> b.getStatus() != BookingStatus.DRAFT)
+				.map(this::mapBookingResponse).toList();
 	}
 
 	// ---------------------------------------------------------

@@ -1,0 +1,368 @@
+================================================================================
+                    QUICK-FIX PROJECT - COMMIT CHANGELOG
+================================================================================
+This file is updated on every commit with:
+  1. Commit Metadata & Summary
+  2. The Problem in Previous Version
+  3. How It Is Solved in This Version
+  4. Detailed File-by-File Breakdown:
+     - What was changed
+     - How it was changed (Before vs After code comparison)
+     - How it solved the problem
+================================================================================
+
+
+################################################################################
+COMMIT: Fix Unselected Provider Booking Count & Premature Database Creation
+DATE: 2026-11-21
+AUTHOR: Quick-Fix Development
+MODULES AFFECTED: QUICK-FIX-BACKEND, QUICK-FIX-FRONT-END
+################################################################################
+
+1. PROBLEM IN PREVIOUS VERSION:
+-------------------------------
+- When a customer proceeded through the booking process (Service -> Address ->
+  Provider Selection), the frontend page `ProviderSelectionPage.jsx` immediately
+  fired a POST request to `/api/bookings` on component mount.
+- This was done because the only backend endpoint available to find nearby
+  providers (`GET /api/bookings/{bookingUniqueId}/providers`) required an existing
+  `bookingUniqueId`.
+- As a direct result, an incomplete booking row was inserted into the MySQL
+  database with status `PENDING` and NO provider assigned (`provider_id = null`).
+- If the customer left the page, closed their browser, clicked Back, or had not
+  yet picked a provider, that orphan booking remained permanently in the database.
+- Furthermore, the Customer Dashboard (`CustomerDashboard.jsx`), Customer Profile
+  (`CustomerProfilePage.jsx`), and My Bookings page (`MyBookingsPage.jsx`) counted
+  any booking with status `PENDING` toward active booking statistics.
+- This caused the dashboard to display "Active Bookings: 1" and show an
+  "Upcoming Booking: Home Service" card with "Quick-Fix Provider" before the user
+  even finished selecting a provider.
+
+
+2. HOW IT IS SOLVED NOW:
+------------------------
+- Added a dedicated direct provider discovery endpoint in the backend:
+  `GET /api/bookings/providers?serviceUniqueId=...&latitude=...&longitude=...`
+  This finds and returns eligible nearby providers using the service ID and location
+  coordinates WITHOUT saving any booking to the database.
+- Removed premature `bookingApi.createBooking(...)` from `ProviderSelectionPage.jsx`
+  on mount. The provider list is fetched directly through the new endpoint.
+- The booking in the database is ONLY created when the customer actually chooses
+  a provider and clicks "Confirm Booking" on the review screen.
+- Added `DRAFT` status to the `BookingStatus` enum.
+- Added `providerUniqueId` to `BookingRequestModel` so that `createBooking` can
+  assign the provider, calculate distance, and set status to `WAITING_FOR_PROVIDER`
+  in a single atomic request.
+- Added an "Exit & Discard Draft" button so users can cancel and exit cleanly.
+- Updated all frontend statistics filters and backend queries to exclude `DRAFT`
+  bookings and unassigned bookings (`hasProvider == false`).
+
+
+================================================================================
+DETAILED FILE-BY-FILE BREAKDOWN
+================================================================================
+
+--------------------------------------------------------------------------------
+FILE 1: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/Enums/BookingStatus.java
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  The enum lacked a DRAFT status. Any preliminary or unassigned booking was
+  assigned PENDING, causing it to be treated as an active booking request.
+
+- WHAT CHANGED:
+  Added `DRAFT` constant to `BookingStatus` enum.
+
+- HOW IT CHANGED:
+  [BEFORE]
+    public enum BookingStatus {
+        PENDING,
+        PROVIDER_SELECTED,
+        WAITING_FOR_PROVIDER,
+        ...
+    }
+
+  [AFTER]
+    public enum BookingStatus {
+        DRAFT,
+        PENDING,
+        PROVIDER_SELECTED,
+        WAITING_FOR_PROVIDER,
+        ...
+    }
+
+- HOW IT SOLVED THE PROBLEM:
+  Gives the backend an explicit status to distinguish incomplete or draft
+  bookings from active confirmed bookings.
+
+
+--------------------------------------------------------------------------------
+FILE 2: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/requestModel/BookingRequestModel.java
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  `BookingRequestModel` did not accept `providerUniqueId`. Creating a booking and
+  attaching a provider required two separate requests (POST create, then PUT select),
+  forcing the system to persist an unassigned booking first.
+
+- WHAT CHANGED:
+  Added `private String providerUniqueId;` field.
+
+- HOW IT CHANGED:
+  [BEFORE]
+    private LocalDate bookingDate;
+    private LocalTime bookingTime;
+
+  [AFTER]
+    private LocalDate bookingDate;
+    private LocalTime bookingTime;
+    private String providerUniqueId;
+
+- HOW IT SOLVED THE PROBLEM:
+  Enables the client to submit the booking with the selected provider in a single
+  atomic creation request.
+
+
+--------------------------------------------------------------------------------
+FILE 3: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/controller/BookingController.java
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Only exposed `GET /api/bookings/{bookingUniqueId}/providers`, which required an
+  existing booking ID to find providers.
+
+- WHAT CHANGED:
+  Added `GET /api/bookings/providers` accepting `serviceUniqueId`, `latitude`,
+  `longitude`, or `addressUniqueId`.
+
+- HOW IT CHANGED:
+  [AFTER]
+    // FIND NEARBY PROVIDERS BY LOCATION (WITHOUT REQUIRING A BOOKING)
+    @GetMapping("/providers")
+    public ResponseEntity<List<ProviderSuggestionResponseModel>> findProvidersByLocation(
+            @RequestParam String serviceUniqueId,
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude,
+            @RequestParam(required = false) String addressUniqueId) {
+
+        return ResponseEntity.ok(bookingService.findProvidersForServiceAndAddress(
+            serviceUniqueId, latitude, longitude, addressUniqueId));
+    }
+
+- HOW IT SOLVED THE PROBLEM:
+  Clients can now query nearby eligible providers by location without needing
+  to insert an unconfirmed booking into the database.
+
+
+--------------------------------------------------------------------------------
+FILE 4: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/service/BookingService.java
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  - `findProviders` required a booking entity from the database.
+  - `createBooking` always initialized bookings with `BookingStatus.PENDING` even
+    without a provider.
+  - `getAllBookings` and `getCustomerBookings` returned all bookings including
+    orphan bookings with null providers.
+  - `selectProvider` and `cancelBooking` did not permit transitioning from `DRAFT`.
+
+- WHAT CHANGED:
+  - Implemented `findProvidersForLocation` and `findProvidersForServiceAndAddress`
+    to search providers using location coordinates.
+  - Refactored `findProviders(bookingUniqueId)` to delegate to location search.
+  - In `createBooking`: if `providerUniqueId` is provided, attaches provider,
+    computes distance/charges, and sets status to `WAITING_FOR_PROVIDER`.
+    If no provider is provided, sets status to `DRAFT`.
+  - In `selectProvider` and `cancelBooking`, permitted `DRAFT` status.
+  - In `getAllBookings` and `getCustomerBookings`, filtered out `DRAFT` and
+    bookings where `status == PENDING && provider == null`.
+
+- HOW IT CHANGED:
+  [AFTER - createBooking]
+    if (request.getProviderUniqueId() != null && !request.getProviderUniqueId().isBlank()) {
+        ...
+        booking.setProvider(provider);
+        booking.setStatus(BookingStatus.WAITING_FOR_PROVIDER);
+    } else {
+        booking.setStatus(BookingStatus.DRAFT);
+    }
+
+  [AFTER - getCustomerBookings]
+    return bookingRepository.findByCustomer_UniqueId(customerUniqueId).stream()
+        .filter(b -> b.getStatus() != BookingStatus.DRAFT && (b.getProvider() != null || b.getStatus() != BookingStatus.PENDING))
+        .map(this::mapBookingResponse).toList();
+
+- HOW IT SOLVED THE PROBLEM:
+  Eliminated premature DB writes for provider search, correctly set status upon
+  creation with provider, and prevented any unassigned bookings from polluting stats.
+
+
+--------------------------------------------------------------------------------
+FILE 5: QUICK-FIX-FRONT-END/src/api/bookingApi.js
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Lacked a client method to find providers by coordinates/address, and did not
+  pass `providerUniqueId` in `createBooking`.
+
+- WHAT CHANGED:
+  - Added `providerUniqueId` to `createBooking` payload.
+  - Added `findNearbyProviders({ serviceUniqueId, latitude, longitude, addressUniqueId })`.
+  - Added `deleteBooking(bookingUniqueId)`.
+
+- HOW IT CHANGED:
+  [AFTER]
+    createBooking: async (customerUniqueId, bookingRequest) => {
+      const payload = {
+        ...
+        providerUniqueId: bookingRequest.providerUniqueId || null
+      };
+      const res = await axiosInstance.post('/bookings', payload, {
+        params: { customerUniqueId }
+      });
+      return normalizeBooking(res.data);
+    },
+
+    findNearbyProviders: async ({ serviceUniqueId, latitude, longitude, addressUniqueId }) => {
+      const params = { serviceUniqueId };
+      if (latitude != null && longitude != null) {
+        params.latitude = latitude;
+        params.longitude = longitude;
+      }
+      if (addressUniqueId) {
+        params.addressUniqueId = addressUniqueId;
+      }
+      const res = await axiosInstance.get('/bookings/providers', { params });
+      return res.data;
+    },
+
+    deleteBooking: async (bookingUniqueId) => {
+      const res = await axiosInstance.delete(`/bookings/${bookingUniqueId}`);
+      return res.data;
+    }
+
+- HOW IT SOLVED THE PROBLEM:
+  Provided frontend pages with clean API functions to discover providers and
+  submit confirmed bookings in one step.
+
+
+--------------------------------------------------------------------------------
+FILE 6: QUICK-FIX-FRONT-END/src/pages/customer/ProviderSelectionPage.jsx
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Called `bookingApi.createBooking(...)` automatically inside `useEffect` on page
+  load. If the customer closed the window, clicked Back, or had not picked a
+  provider, an unassigned pending booking remained in MySQL.
+
+- WHAT CHANGED:
+  - Switched provider discovery from `createBooking` to `findNearbyProviders(...)`.
+  - Deferred database creation to `handleConfirmBooking` (when the customer reviews
+    and confirms their chosen provider).
+  - Passed `providerUniqueId` in the creation payload.
+  - Added `handleDiscardDraft` and an "Exit & Discard Draft" button in the header.
+  - Cleared session draft with `resetDraft()` upon confirmation.
+
+- HOW IT CHANGED:
+  [BEFORE]
+    const draftBooking = await bookingApi.createBooking(user.customerUniqueId, { ... });
+    const eligible = await bookingApi.findNearbyProvidersForBooking(draftBooking.bookingUniqueId);
+
+  [AFTER]
+    const eligible = await bookingApi.findNearbyProviders({
+      serviceUniqueId: bookingDraft.service.uniqueId,
+      latitude: bookingDraft.address?.latitude,
+      longitude: bookingDraft.address?.longitude,
+      addressUniqueId: bookingDraft.address?.uniqueId
+    });
+
+- HOW IT SOLVED THE PROBLEM:
+  Browsing providers is now 100% read-only with zero database side-effects. The
+  booking is only saved once the provider is chosen and confirmed.
+
+
+--------------------------------------------------------------------------------
+FILE 7: QUICK-FIX-FRONT-END/src/pages/customer/CustomerDashboard.jsx
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Counted all `PENDING` bookings in `activeBookings.length`, causing unselected
+  draft bookings to display as active bookings in stats and the upcoming booking card.
+
+- WHAT CHANGED:
+  Filtered `activeBookings` to exclude `DRAFT` status and require `hasProvider == true`.
+
+- HOW IT CHANGED:
+  [BEFORE]
+    const activeStatuses = ['PENDING', 'PROVIDER_SELECTED', 'WAITING_FOR_PROVIDER', ...];
+    const activeBookings = recentBookings.filter((booking) => activeStatuses.includes(String(booking.status || '').toUpperCase()));
+
+  [AFTER]
+    const activeStatuses = ['PROVIDER_SELECTED', 'WAITING_FOR_PROVIDER', 'WAITING_ACCEPTANCE',
+                            'PROVIDER_ACCEPTED', 'CONFIRMED', 'ACCEPTED', 'PROVIDER_EN_ROUTE',
+                            'IN_PROGRESS', 'SERVICE_STARTED'];
+    const activeBookings = recentBookings.filter((booking) => {
+      const status = String(booking.status || '').toUpperCase();
+      if (status === 'DRAFT') return false;
+      const hasProvider = Boolean(booking.providerId || booking.providerName || booking.providerUniqueId);
+      if (!hasProvider) return false;
+      return activeStatuses.includes(status);
+    });
+
+- HOW IT SOLVED THE PROBLEM:
+  Only real, confirmed bookings with an assigned provider are counted in the
+  Active Bookings stat and shown in the Upcoming Booking card.
+
+
+--------------------------------------------------------------------------------
+FILE 8: QUICK-FIX-FRONT-END/src/pages/customer/CustomerProfilePage.jsx
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Used `bookings.length` directly for the "Total bookings" stat card, counting
+  incomplete bookings without providers.
+
+- WHAT CHANGED:
+  Introduced an `isValidBooking` filter excluding drafts and unassigned pending bookings.
+
+- HOW IT CHANGED:
+  [AFTER]
+    const isValidBooking = (b) => {
+      if (!b) return false;
+      const status = String(b.status || '').toUpperCase();
+      if (status === 'DRAFT') return false;
+      const hasProvider = Boolean(b.providerId || b.providerName || b.providerUniqueId);
+      if (status === 'PENDING' && !hasProvider) return false;
+      return true;
+    };
+    const validBookings = bookings.filter(isValidBooking);
+    ...
+    // Total bookings stat card:
+    { label: 'Total bookings', value: validBookings.length, ... }
+
+- HOW IT SOLVED THE PROBLEM:
+  Profile total and completed booking counters accurately reflect real bookings.
+
+
+--------------------------------------------------------------------------------
+FILE 9: QUICK-FIX-FRONT-END/src/pages/customer/MyBookingsPage.jsx
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Displayed unassigned draft bookings in the "All Bookings" and "Pending" tabs.
+
+- WHAT CHANGED:
+  Filtered out drafts and bookings without an assigned provider.
+
+- HOW IT CHANGED:
+  [AFTER]
+    const filteredBookings = bookings.filter(b => {
+      const status = String(b.status || '').toUpperCase();
+      if (status === 'DRAFT') return false;
+      const hasProvider = Boolean(b.providerId || b.providerName || b.providerUniqueId);
+      if (!hasProvider && (status === 'PENDING' || status === 'DRAFT')) return false;
+
+      if (activeTab === 'ALL') return true;
+      if (activeTab === 'PENDING') return ['WAITING_FOR_PROVIDER', 'WAITING_ACCEPTANCE', 'PROVIDER_SELECTED'].includes(status) || (status === 'PENDING' && hasProvider);
+      if (activeTab === 'ACTIVE') return ['PROVIDER_ACCEPTED', 'CONFIRMED', 'ACCEPTED', 'PROVIDER_EN_ROUTE', 'IN_PROGRESS', 'SERVICE_STARTED'].includes(status);
+      if (activeTab === 'CANCELLED') return ['CUSTOMER_CANCELLED', 'PROVIDER_CANCELLED', 'CANCELLED', 'PROVIDER_REJECTED', 'REJECTED'].includes(status);
+      return status === activeTab;
+    });
+
+- HOW IT SOLVED THE PROBLEM:
+  Customer bookings list only displays genuine appointments that have an assigned provider.
+
+================================================================================
+                                END OF CHANGELOG
+================================================================================

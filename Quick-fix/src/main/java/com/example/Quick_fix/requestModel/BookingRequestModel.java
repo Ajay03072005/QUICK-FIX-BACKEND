@@ -21,4 +21,6 @@ public class BookingRequestModel {
     private LocalDate bookingDate;
 
     private LocalTime bookingTime;
+
+    private String providerUniqueId;
 }

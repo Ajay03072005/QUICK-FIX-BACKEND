@@ -2,6 +2,8 @@ package com.example.Quick_fix.Enums;
 
 public enum BookingStatus {
 
+	DRAFT,
+
 	PENDING,
 
 	PROVIDER_SELECTED,
