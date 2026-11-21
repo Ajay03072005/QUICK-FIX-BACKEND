@@ -1,6 +1,7 @@
 package com.example.Quick_fix.service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.List;
@@ -184,6 +185,10 @@ public class BookingService {
 
 		Double customerLongitude = booking.getBookingAddress().getLongitude();
 
+		if (!isValidCoordinate(customerLatitude, customerLongitude)) {
+			throw new IllegalStateException("Booking address has invalid map coordinates. Update the customer address and try again.");
+		}
+
 		for (ProviderServiceHistoryEntity history : providers) {
 
 			ProviderEntity provider = history.getProvider();
@@ -192,7 +197,8 @@ public class BookingService {
 			ProviderAddressEntity providerAddress = primaryAddresses.get(provider.getUniqueId());
 
 			if (providerAddress == null || providerAddress.getLatitude() == null
-					|| providerAddress.getLongitude() == null) {
+					|| providerAddress.getLongitude() == null
+					|| !isValidCoordinate(providerAddress.getLatitude(), providerAddress.getLongitude())) {
 				continue;
 			}
 
@@ -207,16 +213,23 @@ public class BookingService {
 
 			response.setProviderUniqueId(provider.getUniqueId());
 			response.setProviderName(provider.getName());
+			response.setLatitude(providerAddress.getLatitude());
+			response.setLongitude(providerAddress.getLongitude());
+			response.setAvailabilityStatus(provider.getAvailabilityStatus());
 			response.setDistance(distance);
 			response.setServicePrice(service.getServiceCharge());
 			response.setDistanceCharge(distanceCharge);
 			response.setTotalAmount(totalAmount);
-			response.setAvailable(true);
+			String availabilityStatus = provider.getAvailabilityStatus();
+			response.setAvailable("AVAILABLE_NOW".equalsIgnoreCase(availabilityStatus)
+					|| "AVAILABLE_TODAY".equalsIgnoreCase(availabilityStatus));
 
-			result.add(response);
+			if (response.isAvailable()) {
+				result.add(response);
+			}
 		}
 
-		return result;
+		return result.stream().sorted(Comparator.comparing(ProviderSuggestionResponseModel::getDistance)).toList();
 	}
 
 	// ---------------------------------------------------------
@@ -236,9 +249,26 @@ public class BookingService {
 		ProviderEntity provider = providerRepository.findByUniqueId(request.getProviderUniqueId())
 				.orElseThrow(() -> new RuntimeException("Provider not found"));
 
+		boolean providesService = providerServiceHistoryRepository
+				.findByProvider_UniqueIdAndService(provider.getUniqueId(), booking.getService().getServiceType())
+				.stream()
+				.anyMatch(history -> "ACTIVE".equalsIgnoreCase(history.getStatus()));
+		if (!providesService) {
+			throw new IllegalStateException("This provider does not offer the selected service.");
+		}
+
+		if (!"AVAILABLE_NOW".equalsIgnoreCase(provider.getAvailabilityStatus())
+				&& !"AVAILABLE_TODAY".equalsIgnoreCase(provider.getAvailabilityStatus())) {
+			throw new IllegalStateException("This provider is no longer available. Please choose another provider.");
+		}
+
 		ProviderAddressEntity providerAddress = providerAddressRepository
 				.findByProvider_UniqueIdAndPrimary(provider.getUniqueId(), true)
 				.orElseThrow(() -> new RuntimeException("Provider address not found"));
+		if (!isValidCoordinate(booking.getBookingAddress().getLatitude(), booking.getBookingAddress().getLongitude())
+				|| !isValidCoordinate(providerAddress.getLatitude(), providerAddress.getLongitude())) {
+			throw new IllegalStateException("Customer and provider addresses must have valid map coordinates.");
+		}
 
 		double distance = calculateDistance(booking.getBookingAddress().getLatitude(),
 				booking.getBookingAddress().getLongitude(), providerAddress.getLatitude(),
@@ -398,6 +428,13 @@ public class BookingService {
 		double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
 		return Math.round(EARTH_RADIUS * c * 100.0) / 100.0;
+	}
+
+	private boolean isValidCoordinate(Double latitude, Double longitude) {
+		return latitude != null && longitude != null
+				&& Double.isFinite(latitude) && Double.isFinite(longitude)
+				&& latitude >= -90 && latitude <= 90
+				&& longitude >= -180 && longitude <= 180;
 	}
 
 	// ---------------------------------------------------------

@@ -372,6 +372,7 @@ public class ProviderService {
 		providerAvailabilityRepository.deleteByProviderId(provider.getId());
 
 		List<com.example.Quick_fix.Entity.ProviderAvailabilityEntity> entities = new ArrayList<>();
+		boolean hasWorkingDay = false;
 		if (requests != null) {
 			for (com.example.Quick_fix.requestModel.ProviderAvailabilityRequestModel req : requests) {
 				com.example.Quick_fix.Entity.ProviderAvailabilityEntity entity = new com.example.Quick_fix.Entity.ProviderAvailabilityEntity();
@@ -380,11 +381,14 @@ public class ProviderService {
 				entity.setStartTime(req.getStartTime());
 				entity.setEndTime(req.getEndTime());
 				entity.setWorkingDay(req.isWorkingDay());
+				hasWorkingDay |= req.isWorkingDay();
 				entities.add(entity);
 			}
 		}
 
 		List<com.example.Quick_fix.Entity.ProviderAvailabilityEntity> saved = providerAvailabilityRepository.saveAll(entities);
+		provider.setAvailabilityStatus(hasWorkingDay ? "AVAILABLE_NOW" : "OFFLINE");
+		providerRepository.save(provider);
 		return saved.stream().map(avail -> new com.example.Quick_fix.ResponseModel.ProviderAvailabilityResponseModel(
 				avail.getId(), avail.getWeekday(), avail.getStartTime(), avail.getEndTime(), avail.isWorkingDay()
 		)).toList();

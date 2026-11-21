@@ -42,7 +42,8 @@ public class SecurityConfig {
             .headers(headers -> headers.frameOptions(frame -> frame.disable()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/ws/**", "/api/bookings/*/tracking/**").authenticated()
+                .requestMatchers("/ws/**").permitAll()
+                .requestMatchers("/api/bookings/*/tracking/**").authenticated()
                 .requestMatchers(
                     "/api/auth/**",
                     "/api/services/**",

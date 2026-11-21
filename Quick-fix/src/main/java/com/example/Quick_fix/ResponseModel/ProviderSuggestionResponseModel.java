@@ -13,6 +13,12 @@ public class ProviderSuggestionResponseModel {
 
     private Double rating;
 
+    private Double latitude;
+
+    private Double longitude;
+
+    private String availabilityStatus;
+
     private Double distance;
 
     private Double servicePrice;
