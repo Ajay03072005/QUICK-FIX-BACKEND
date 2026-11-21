@@ -152,10 +152,12 @@ public class BookingService {
 			ProviderEntity provider = providerRepository.findByUniqueId(request.getProviderUniqueId())
 					.orElseThrow(() -> new RuntimeException("Provider not found"));
 
-			boolean providesService = providerServiceHistoryRepository
-					.findByProvider_UniqueIdAndService(provider.getUniqueId(), service.getServiceType())
+			List<ProviderServiceHistoryEntity> allServices = providerServiceHistoryRepository
+					.findByProvider_UniqueId(provider.getUniqueId());
+			boolean providesService = allServices.isEmpty() || allServices
 					.stream()
-					.anyMatch(history -> "ACTIVE".equalsIgnoreCase(history.getStatus()));
+					.anyMatch(history -> history.getService() == service.getServiceType()
+							&& "ACTIVE".equalsIgnoreCase(history.getStatus()));
 			if (!providesService) {
 				throw new IllegalStateException("This provider does not offer the selected service.");
 			}
@@ -249,15 +251,30 @@ public class BookingService {
 		ServiceEntity service = serviceRepository.findByUniqueId(serviceUniqueId)
 				.orElseThrow(() -> new RuntimeException("Service not found"));
 
-		List<ProviderServiceHistoryEntity> providers = providerServiceHistoryRepository
+		List<ProviderServiceHistoryEntity> serviceSpecificProviders = providerServiceHistoryRepository
 				.findByServiceAndStatus(service.getServiceType(), "ACTIVE");
 
-		List<String> providerIds = providers.stream()
+		List<String> candidateProviderIds = new ArrayList<>(serviceSpecificProviders.stream()
 				.map(history -> history.getProvider().getUniqueId())
 				.distinct()
+				.toList());
+
+		List<ProviderEntity> allActiveProviders = providerRepository.findAll().stream()
+				.filter(p -> "AVAILABLE_NOW".equalsIgnoreCase(p.getAvailabilityStatus())
+						|| "AVAILABLE_TODAY".equalsIgnoreCase(p.getAvailabilityStatus()))
 				.toList();
-		Map<String, ProviderAddressEntity> primaryAddresses = providerIds.isEmpty() ? Map.of()
-				: providerAddressRepository.findPrimaryAddressesByProviderIds(providerIds).stream()
+
+		for (ProviderEntity p : allActiveProviders) {
+			if (!candidateProviderIds.contains(p.getUniqueId())) {
+				List<ProviderServiceHistoryEntity> history = providerServiceHistoryRepository.findByProvider_UniqueId(p.getUniqueId());
+				if (history.isEmpty()) {
+					candidateProviderIds.add(p.getUniqueId());
+				}
+			}
+		}
+
+		Map<String, ProviderAddressEntity> primaryAddresses = candidateProviderIds.isEmpty() ? Map.of()
+				: providerAddressRepository.findPrimaryAddressesByProviderIds(candidateProviderIds).stream()
 						.collect(Collectors.toMap(address -> address.getProvider().getUniqueId(), Function.identity(), (first, ignored) -> first));
 
 		List<ProviderSuggestionResponseModel> result = new ArrayList<>();
@@ -267,18 +284,18 @@ public class BookingService {
 			throw new IllegalStateException("Booking address has invalid map coordinates. Update the customer address and try again.");
 		}
 
-		for (ProviderServiceHistoryEntity history : providers) {
+		for (String provUniqueId : candidateProviderIds) {
+			if (!addedProviderIds.add(provUniqueId)) continue;
 
-			ProviderEntity provider = history.getProvider();
-			if (!addedProviderIds.add(provider.getUniqueId())) continue;
-
-			ProviderAddressEntity providerAddress = primaryAddresses.get(provider.getUniqueId());
+			ProviderAddressEntity providerAddress = primaryAddresses.get(provUniqueId);
 
 			if (providerAddress == null || providerAddress.getLatitude() == null
 					|| providerAddress.getLongitude() == null
 					|| !isValidCoordinate(providerAddress.getLatitude(), providerAddress.getLongitude())) {
 				continue;
 			}
+
+			ProviderEntity provider = providerAddress.getProvider();
 
 			double distance = calculateDistance(customerLatitude, customerLongitude, providerAddress.getLatitude(),
 					providerAddress.getLongitude());
@@ -333,10 +350,12 @@ public class BookingService {
 		ProviderEntity provider = providerRepository.findByUniqueId(request.getProviderUniqueId())
 				.orElseThrow(() -> new RuntimeException("Provider not found"));
 
-		boolean providesService = providerServiceHistoryRepository
-				.findByProvider_UniqueIdAndService(provider.getUniqueId(), booking.getService().getServiceType())
+		List<ProviderServiceHistoryEntity> allServices = providerServiceHistoryRepository
+				.findByProvider_UniqueId(provider.getUniqueId());
+		boolean providesService = allServices.isEmpty() || allServices
 				.stream()
-				.anyMatch(history -> "ACTIVE".equalsIgnoreCase(history.getStatus()));
+				.anyMatch(history -> history.getService() == booking.getService().getServiceType()
+						&& "ACTIVE".equalsIgnoreCase(history.getStatus()));
 		if (!providesService) {
 			throw new IllegalStateException("This provider does not offer the selected service.");
 		}

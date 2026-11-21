@@ -16,4 +16,6 @@ public interface ProviderServiceHistoryRepository extends JpaRepository<Provider
 	List<ProviderServiceHistoryEntity> findByServiceAndStatus(ServiceType service, String status);
 
 	List<ProviderServiceHistoryEntity> findByProvider_UniqueIdAndService(String providerUniqueId, ServiceType service);
+
+	List<ProviderServiceHistoryEntity> findByProvider_UniqueId(String providerUniqueId);
 }
