@@ -32,6 +32,13 @@ public class PaymentController {
 		return ResponseEntity.ok(paymentService.verifyPayment(request));
 	}
 
+	// RECORD CASH PAYMENT (DOORSTEP SETTLEMENT)
+	@PostMapping("/api/payments/cash")
+	public ResponseEntity<PaymentResponseModel> recordCashPayment(
+			@Valid @RequestBody com.example.Quick_fix.requestModel.CashPaymentRequestModel request) {
+		return ResponseEntity.ok(paymentService.recordCashPayment(request));
+	}
+
 	// WEBHOOK ENDPOINT
 	@PostMapping("/api/payments/webhook")
 	public ResponseEntity<String> handleWebhook(

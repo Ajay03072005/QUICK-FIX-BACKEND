@@ -53,4 +53,7 @@ public class PaymentEntity extends BaseEntity {
 
 	@Column(name = "paid_at")
 	private LocalDateTime paidAt;
+
+	@Column(name = "created_at")
+	private LocalDateTime createdAt = LocalDateTime.now();
 }

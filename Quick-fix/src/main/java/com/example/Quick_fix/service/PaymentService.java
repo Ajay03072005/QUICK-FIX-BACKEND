@@ -87,7 +87,7 @@ public class PaymentService {
 
 		// Reuse existing pending payment if available
 		Optional<PaymentEntity> existingPayment = paymentRepository
-				.findFirstByBooking_UniqueIdAndStatusInOrderByCreatedAtDesc(
+				.findFirstByBooking_UniqueIdAndStatusInOrderByIdDesc(
 						booking.getUniqueId(), List.of(PaymentStatus.CREATED, PaymentStatus.PENDING));
 
 		PaymentEntity payment;
@@ -104,6 +104,7 @@ public class PaymentService {
 			payment.setAmount(totalAmount);
 			payment.setCurrency("INR");
 			payment.setStatus(PaymentStatus.CREATED);
+			payment.setCreatedAt(LocalDateTime.now());
 
 			// Call Razorpay API to create order
 			razorpayOrderId = createRazorpayOrder(payment.getUniqueId(), amountInPaise, "INR");
@@ -237,6 +238,48 @@ public class PaymentService {
 		PaymentEntity payment = paymentRepository.findByUniqueId(uniqueId)
 				.orElseThrow(() -> new RuntimeException("Payment not found: " + uniqueId));
 
+		return mapToResponseModel(payment);
+	}
+
+	// ---------------------------------------------------------
+	// CASH PAYMENT SETTLEMENT
+	// ---------------------------------------------------------
+	@Transactional
+	public PaymentResponseModel recordCashPayment(com.example.Quick_fix.requestModel.CashPaymentRequestModel request) {
+		ServiceBookingEntity booking = bookingRepository.findByUniqueId(request.getBookingUniqueId())
+				.orElseThrow(() -> new RuntimeException("Booking not found: " + request.getBookingUniqueId()));
+
+		if (booking.getStatus() == BookingStatus.CUSTOMER_CANCELLED || 
+			booking.getStatus() == BookingStatus.PROVIDER_CANCELLED ||
+			booking.getStatus() == BookingStatus.PROVIDER_REJECTED) {
+			throw new RuntimeException("Payment is not allowed for cancelled or rejected bookings");
+		}
+
+		if (booking.getPaymentStatus() == PaymentStatus.PAID || booking.getPaymentStatus() == PaymentStatus.SUCCESS) {
+			Optional<PaymentEntity> paidOpt = paymentRepository.findByBooking_UniqueId(booking.getUniqueId());
+			if (paidOpt.isPresent()) {
+				return mapToResponseModel(paidOpt.get());
+			}
+		}
+
+		Double totalAmount = booking.getTotalAmount() != null ? booking.getTotalAmount()
+				: ((booking.getServicePrice() != null ? booking.getServicePrice() : 0.0) + (booking.getDistanceCharge() != null ? booking.getDistanceCharge() : 0.0));
+
+		PaymentEntity payment = new PaymentEntity();
+		payment.setUniqueId(generateUniqueId());
+		payment.setBooking(booking);
+		payment.setAmount(totalAmount);
+		payment.setCurrency("INR");
+		payment.setPaymentMethod("CASH");
+		payment.setStatus(PaymentStatus.PAID);
+		payment.setPaidAt(LocalDateTime.now());
+		payment.setCreatedAt(LocalDateTime.now());
+		payment = paymentRepository.save(payment);
+
+		booking.setPaymentStatus(PaymentStatus.PAID);
+		bookingRepository.save(booking);
+
+		log.info("Cash payment recorded successfully for booking {}", booking.getUniqueId());
 		return mapToResponseModel(payment);
 	}
 

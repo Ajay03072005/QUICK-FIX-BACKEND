@@ -883,6 +883,262 @@ FILE 5: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/service/
   Ensures that providers created with workshop addresses within 30 km appear in customer
   search results and can be booked successfully.
 
+
+################################################################################
+COMMIT: Fix 400 Bad Request on Provider Mark En-Route & Data Truncation
+DATE: 2026-11-21
+AUTHOR: Quick-Fix Development
+MODULES AFFECTED: QUICK-FIX-BACKEND, DATABASE (quickfixfinal)
+################################################################################
+
+1. PROBLEM IN PREVIOUS VERSION:
+-------------------------------
+- On the Provider Active Service page (`/provider/active-service/:uniqueId`), when the
+  provider clicked the "Mark En Route (Travelling to Site)" button:
+  A PUT request was sent to `/api/bookings/{bookingUniqueId}/en-route`.
+- The request immediately failed with HTTP 400 Bad Request:
+  `"message": "could not execute statement [Data truncation: Data too long for column 'status' at row 1] [update booking set ... where id=?]"`
+- Root Cause:
+  In the MySQL database (`quickfixfinal`), the `status` column in table `booking` was
+  defined as a MySQL ENUM:
+  `status enum('COMPLETED','CONFIRMED','CUSTOMER_CANCELLED','IN_PROGRESS','PENDING','PROVIDER_ACCEPTED','PROVIDER_CANCELLED','PROVIDER_REJECTED','PROVIDER_SELECTED','WAITING_FOR_PROVIDER')`
+- The enum values `PROVIDER_EN_ROUTE`, `DRAFT`, and `DISPUTED` (which exist in Java's `BookingStatus` enum)
+  were MISSING from the MySQL column definition.
+- When Hibernate executed `UPDATE booking SET status='PROVIDER_EN_ROUTE' WHERE id=?`, MySQL rejected it
+  with a Data Truncation error.
+- Similarly, `booking.payment_status` was constrained to `enum('FAILED','PAID','PENDING','REFUNDED')`,
+  missing values from Java `PaymentStatus` (e.g. `SUCCESS`, `CREATED`, `REFUND_PENDING`, `PARTIALLY_REFUNDED`).
+- In addition, in `BookingService.java`, `startBooking` strictly checked `if (booking.getStatus() != BookingStatus.CONFIRMED)`,
+  which would prevent starting a service once marked as `PROVIDER_EN_ROUTE`.
+
+
+2. HOW IT IS SOLVED NOW:
+------------------------
+- In MySQL Database (`quickfixfinal`):
+  Modified the `booking.status` and `booking.payment_status` columns to `VARCHAR(40) NOT NULL`:
+  `ALTER TABLE booking MODIFY COLUMN status VARCHAR(40) NOT NULL;`
+  `ALTER TABLE booking MODIFY COLUMN payment_status VARCHAR(40) NOT NULL;`
+  This aligns with JPA's standard `@Enumerated(EnumType.STRING)` mapping and eliminates MySQL enum
+  data truncation errors permanently.
+- In `BookingService.java`:
+  Updated `startBooking` to accept bookings that are either `CONFIRMED` or `PROVIDER_EN_ROUTE`:
+  `if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.PROVIDER_EN_ROUTE)`
+- Verified endpoint `PUT /api/bookings/494646/en-route`:
+  The request executed with HTTP 200 OK and updated status to `PROVIDER_EN_ROUTE`.
+
+
+================================================================================
+DETAILED FILE-BY-FILE BREAKDOWN
+================================================================================
+
+--------------------------------------------------------------------------------
+DATABASE: MySQL Table `booking` (`quickfixfinal`)
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  `status` column was defined as `enum('COMPLETED','CONFIRMED','CUSTOMER_CANCELLED','IN_PROGRESS','PENDING','PROVIDER_ACCEPTED','PROVIDER_CANCELLED','PROVIDER_REJECTED','PROVIDER_SELECTED','WAITING_FOR_PROVIDER')`.
+  `payment_status` was defined as `enum('FAILED','PAID','PENDING','REFUNDED')`.
+  Attempting to save `PROVIDER_EN_ROUTE` or other statuses threw a Data Truncation error.
+
+- WHAT CHANGED:
+  Executed:
+  `ALTER TABLE booking MODIFY COLUMN status VARCHAR(40) NOT NULL;`
+  `ALTER TABLE booking MODIFY COLUMN payment_status VARCHAR(40) NOT NULL;`
+
+- HOW IT SOLVED THE PROBLEM:
+  Supports all valid Java `BookingStatus` and `PaymentStatus` enum values without truncation.
+
+
+--------------------------------------------------------------------------------
+FILE 1: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/service/BookingService.java
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  `startBooking` only permitted starting a service if the status was `CONFIRMED`.
+  After a provider marked the job as `PROVIDER_EN_ROUTE`, clicking "Start Service" would fail.
+
+- WHAT CHANGED:
+  Allowed starting the service from both `CONFIRMED` and `PROVIDER_EN_ROUTE` states.
+
+- HOW IT CHANGED:
+  [BEFORE]
+    if (booking.getStatus() != BookingStatus.CONFIRMED) {
+        throw new RuntimeException("Only confirmed booking can be started");
+    }
+
+  [AFTER]
+    if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.PROVIDER_EN_ROUTE) {
+        throw new RuntimeException("Only confirmed or en-route bookings can be started");
+    }
+
+- HOW IT SOLVED THE PROBLEM:
+  Permits a seamless flow from `CONFIRMED` -> `PROVIDER_EN_ROUTE` -> `IN_PROGRESS` -> `COMPLETED`.
+
+
+################################################################################
+COMMIT: Payment Module Optimization, Cash on Delivery & Order Query Fix
+DATE: 2026-11-21
+AUTHOR: Quick-Fix Development
+MODULES AFFECTED: QUICK-FIX-BACKEND, QUICK-FIX-FRONT-END, DATABASE (quickfixfinal)
+################################################################################
+
+1. PROBLEMS IN PREVIOUS VERSION:
+-------------------------------
+PROBLEM A: Missing `created_at` in MySQL Payment Table Causing SQL Exception on Order Creation
+- In `PaymentRepository.java`:
+  `findFirstByBooking_UniqueIdAndStatusInOrderByCreatedAtDesc(...)` generated SQL:
+  `SELECT ... FROM payment WHERE ... ORDER BY created_at DESC`.
+- The MySQL `payment` table did NOT have a `created_at` column because `BaseEntity`
+  lacked `@MappedSuperclass`.
+- When `paymentService.createOrder` attempted to reuse or lookup existing orders, Hibernate
+  threw `SQLGrammarException: Unknown column 'created_at' in 'order clause'`.
+
+PROBLEM B: Lack of Doorstep / Cash Payment Option
+- The UI promised: "* No upfront payment required. Pay directly after service completion via Cash or UPI."
+- However, the payment module only supported Razorpay checkout. There was no explicit
+  Cash on Delivery (COD) settlement endpoint to record payments collected in cash by technicians,
+  leaving bookings stuck in `PENDING` payment status if paid in cash.
+
+PROBLEM C: Lambda Variable Capture Error in BookingService
+- In `selectProvider`, variable `booking` was modified after being referenced inside a stream
+  lambda expression, triggering a Java compilation error:
+  `local variables referenced from a lambda expression must be final or effectively final`.
+
+
+2. HOW IT IS SOLVED NOW:
+------------------------
+SOLUTION A: Database Schema & Repository Query Fix
+- In `PaymentRepository.java`:
+  Changed query method to `findFirstByBooking_UniqueIdAndStatusInOrderByIdDesc(...)`.
+  Since `id` is the auto-increment primary key, sorting by `id DESC` accurately retrieves
+  the latest order without relying on an unindexed or missing timestamp column.
+- In MySQL Database (`quickfixfinal`):
+  Added `created_at` column: `ALTER TABLE payment ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;`
+- In `PaymentEntity.java`:
+  Explicitly declared `@Column(name = "created_at") private LocalDateTime createdAt = LocalDateTime.now();`
+  ensuring receipt generation has accurate server timestamps.
+
+SOLUTION B: Cash Payment Settlement (Doorstep Cash / Cash on Delivery)
+- In Backend (`QUICK-FIX-BACKEND`):
+  - Created `CashPaymentRequestModel.java`.
+  - Added `recordCashPayment` in `PaymentService.java` and `PaymentController.java` (`POST /api/payments/cash`).
+  - Records a verified `PaymentEntity` with `paymentMethod = "CASH"` and status `PAID`.
+  - Automatically transitions `booking.paymentStatus` to `PAID` and credits provider earnings.
+- In Frontend (`QUICK-FIX-FRONT-END`):
+  - Added `paymentApi.recordCashPayment(bookingUniqueId, customerUniqueId)` in `paymentApi.js`.
+  - Added "Pay Cash Directly to Technician" button with confirmation prompt on `BookingPaymentPage.jsx`.
+  - Directly redirects customer to verified payment receipt upon cash confirmation.
+
+SOLUTION C: Final Variable Capture Fix
+- In `BookingService.java`:
+  Extracted `final ServiceType targetServiceType = booking.getService().getServiceType();`
+  prior to the stream filter lambda, ensuring full Java 17 compilation compliance.
+
+
+================================================================================
+DETAILED FILE-BY-FILE BREAKDOWN
+================================================================================
+
+--------------------------------------------------------------------------------
+DATABASE: MySQL Table `payment` (`quickfixfinal`)
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  `created_at` column did not exist in `payment` table.
+
+- WHAT CHANGED:
+  Executed:
+  `ALTER TABLE payment ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;`
+
+- HOW IT SOLVED THE PROBLEM:
+  Stores creation timestamp for all payment records and receipts.
+
+
+--------------------------------------------------------------------------------
+FILE 1: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/repository/PaymentRepository.java
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Method ordered by non-existent `CreatedAt`.
+
+- WHAT CHANGED:
+  Changed method to `findFirstByBooking_UniqueIdAndStatusInOrderByIdDesc`.
+
+- HOW IT CHANGED:
+  [BEFORE]
+    Optional<PaymentEntity> findFirstByBooking_UniqueIdAndStatusInOrderByCreatedAtDesc(
+        String bookingUniqueId, List<PaymentStatus> statuses);
+
+  [AFTER]
+    Optional<PaymentEntity> findFirstByBooking_UniqueIdAndStatusInOrderByIdDesc(
+        String bookingUniqueId, List<PaymentStatus> statuses);
+
+- HOW IT SOLVED THE PROBLEM:
+  Eliminates `Unknown column 'created_at'` SQLGrammarException on order creation.
+
+
+--------------------------------------------------------------------------------
+FILE 2: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/service/PaymentService.java
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  1. Used `findFirstByBooking_UniqueIdAndStatusInOrderByCreatedAtDesc`.
+  2. Lacked cash payment recording capability.
+
+- WHAT CHANGED:
+  1. Updated call to `findFirstByBooking_UniqueIdAndStatusInOrderByIdDesc`.
+  2. Implemented `recordCashPayment(CashPaymentRequestModel request)`.
+
+- HOW IT SOLVED THE PROBLEM:
+  Enables order reuse without errors and supports doorstep cash payment settlements.
+
+
+--------------------------------------------------------------------------------
+FILE 3: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/controller/PaymentController.java
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Lacked a cash payment REST endpoint.
+
+- WHAT CHANGED:
+  Added `POST /api/payments/cash` mapped to `paymentService.recordCashPayment(request)`.
+
+- HOW IT SOLVED THE PROBLEM:
+  Exposes doorstep cash settlement to the frontend.
+
+
+--------------------------------------------------------------------------------
+FILE 4: QUICK-FIX-FRONT-END/src/api/paymentApi.js
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Lacked `recordCashPayment` client API method.
+
+- WHAT CHANGED:
+  Added `recordCashPayment: async (bookingUniqueId, customerUniqueId) => ...` calling `POST /payments/cash`.
+
+- HOW IT SOLVED THE PROBLEM:
+  Allows the checkout UI to trigger cash settlements.
+
+
+--------------------------------------------------------------------------------
+FILE 5: QUICK-FIX-FRONT-END/src/pages/customer/BookingPaymentPage.jsx
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Only rendered the Razorpay checkout button with no cash payment alternative.
+
+- WHAT CHANGED:
+  Added "Pay Cash Directly to Technician" action button with confirmation dialog and toast feedback.
+
+- HOW IT SOLVED THE PROBLEM:
+  Provides customers with the option to settle via Cash or online Razorpay (UPI, Card, NetBanking).
+
+
+--------------------------------------------------------------------------------
+FILE 6: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/service/BookingService.java
+--------------------------------------------------------------------------------
+- PREVIOUS PROBLEM:
+  Lambda referenced `booking` which was re-assigned later in method.
+
+- WHAT CHANGED:
+  Extracted `final ServiceType targetServiceType = booking.getService().getServiceType();`.
+
+- HOW IT SOLVED THE PROBLEM:
+  Resolves Java 17 effectively-final compilation requirement.
+
 ================================================================================
                                 END OF CHANGELOG
 ================================================================================

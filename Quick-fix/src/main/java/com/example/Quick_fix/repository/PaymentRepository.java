@@ -22,6 +22,6 @@ public interface PaymentRepository extends JpaRepository<PaymentEntity, Long> {
 
 	boolean existsByUniqueId(String uniqueId);
 
-	Optional<PaymentEntity> findFirstByBooking_UniqueIdAndStatusInOrderByCreatedAtDesc(
+	Optional<PaymentEntity> findFirstByBooking_UniqueIdAndStatusInOrderByIdDesc(
 			String bookingUniqueId, List<PaymentStatus> statuses);
 }

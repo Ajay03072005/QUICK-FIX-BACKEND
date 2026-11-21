@@ -350,11 +350,12 @@ public class BookingService {
 		ProviderEntity provider = providerRepository.findByUniqueId(request.getProviderUniqueId())
 				.orElseThrow(() -> new RuntimeException("Provider not found"));
 
+		final com.example.Quick_fix.Enums.ServiceType targetServiceType = booking.getService().getServiceType();
 		List<ProviderServiceHistoryEntity> allServices = providerServiceHistoryRepository
 				.findByProvider_UniqueId(provider.getUniqueId());
 		boolean providesService = allServices.isEmpty() || allServices
 				.stream()
-				.anyMatch(history -> history.getService() == booking.getService().getServiceType()
+				.anyMatch(history -> history.getService() == targetServiceType
 						&& "ACTIVE".equalsIgnoreCase(history.getStatus()));
 		if (!providesService) {
 			throw new IllegalStateException("This provider does not offer the selected service.");
