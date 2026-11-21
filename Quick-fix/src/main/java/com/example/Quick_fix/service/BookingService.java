@@ -50,6 +50,8 @@ public class BookingService {
 	private final BookingAddressRepository bookingAddressRepository;
 	private final FinanceService financeService;
 
+	public static final double DEFAULT_MAX_DISTANCE_KM = 30.0;
+
 	// ---------------------------------------------------------
 	// CREATE BOOKING REQUEST
 	// ---------------------------------------------------------
@@ -174,6 +176,9 @@ public class BookingService {
 
 			distance = calculateDistance(bookingAddress.getLatitude(), bookingAddress.getLongitude(),
 					providerAddress.getLatitude(), providerAddress.getLongitude());
+			if (distance > DEFAULT_MAX_DISTANCE_KM) {
+				throw new IllegalStateException("Selected provider is " + distance + " km away. Only providers within " + (int) DEFAULT_MAX_DISTANCE_KM + " km can be booked.");
+			}
 			distanceCharge = calculateDistanceCharge(distance);
 			totalAmount = servicePrice + distanceCharge;
 
@@ -203,12 +208,18 @@ public class BookingService {
 		return findProvidersForLocation(
 				booking.getService().getUniqueId(),
 				booking.getBookingAddress().getLatitude(),
-				booking.getBookingAddress().getLongitude()
+				booking.getBookingAddress().getLongitude(),
+				DEFAULT_MAX_DISTANCE_KM
 		);
 	}
 
 	@Transactional
 	public List<ProviderSuggestionResponseModel> findProvidersForServiceAndAddress(String serviceUniqueId, Double latitude, Double longitude, String addressUniqueId) {
+		return findProvidersForServiceAndAddress(serviceUniqueId, latitude, longitude, addressUniqueId, DEFAULT_MAX_DISTANCE_KM);
+	}
+
+	@Transactional
+	public List<ProviderSuggestionResponseModel> findProvidersForServiceAndAddress(String serviceUniqueId, Double latitude, Double longitude, String addressUniqueId, Double maxDistanceKm) {
 		Double targetLatitude = latitude;
 		Double targetLongitude = longitude;
 
@@ -223,11 +234,17 @@ public class BookingService {
 			throw new IllegalArgumentException("Customer location coordinates or addressUniqueId are required.");
 		}
 
-		return findProvidersForLocation(serviceUniqueId, targetLatitude, targetLongitude);
+		double maxKm = (maxDistanceKm != null && maxDistanceKm > 0) ? maxDistanceKm : DEFAULT_MAX_DISTANCE_KM;
+		return findProvidersForLocation(serviceUniqueId, targetLatitude, targetLongitude, maxKm);
 	}
 
 	@Transactional
 	public List<ProviderSuggestionResponseModel> findProvidersForLocation(String serviceUniqueId, Double customerLatitude, Double customerLongitude) {
+		return findProvidersForLocation(serviceUniqueId, customerLatitude, customerLongitude, DEFAULT_MAX_DISTANCE_KM);
+	}
+
+	@Transactional
+	public List<ProviderSuggestionResponseModel> findProvidersForLocation(String serviceUniqueId, Double customerLatitude, Double customerLongitude, double maxDistanceKm) {
 
 		ServiceEntity service = serviceRepository.findByUniqueId(serviceUniqueId)
 				.orElseThrow(() -> new RuntimeException("Service not found"));
@@ -266,6 +283,10 @@ public class BookingService {
 			double distance = calculateDistance(customerLatitude, customerLongitude, providerAddress.getLatitude(),
 					providerAddress.getLongitude());
 
+			if (distance > maxDistanceKm) {
+				continue;
+			}
+
 			double distanceCharge = calculateDistanceCharge(distance);
 
 			double totalAmount = service.getServiceCharge() + distanceCharge;
@@ -281,6 +302,7 @@ public class BookingService {
 			response.setServicePrice(service.getServiceCharge());
 			response.setDistanceCharge(distanceCharge);
 			response.setTotalAmount(totalAmount);
+			response.setRating(4.8);
 			String availabilityStatus = provider.getAvailabilityStatus();
 			response.setAvailable("AVAILABLE_NOW".equalsIgnoreCase(availabilityStatus)
 					|| "AVAILABLE_TODAY".equalsIgnoreCase(availabilityStatus));
@@ -335,6 +357,10 @@ public class BookingService {
 		double distance = calculateDistance(booking.getBookingAddress().getLatitude(),
 				booking.getBookingAddress().getLongitude(), providerAddress.getLatitude(),
 				providerAddress.getLongitude());
+
+		if (distance > DEFAULT_MAX_DISTANCE_KM) {
+			throw new IllegalStateException("Selected provider is " + distance + " km away. Only providers within " + (int) DEFAULT_MAX_DISTANCE_KM + " km can be booked.");
+		}
 
 		double distanceCharge = calculateDistanceCharge(distance);
 

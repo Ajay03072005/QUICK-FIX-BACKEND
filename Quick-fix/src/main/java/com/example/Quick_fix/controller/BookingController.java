@@ -42,9 +42,10 @@ public class BookingController {
 			@RequestParam String serviceUniqueId,
 			@RequestParam(required = false) Double latitude,
 			@RequestParam(required = false) Double longitude,
-			@RequestParam(required = false) String addressUniqueId) {
+			@RequestParam(required = false) String addressUniqueId,
+			@RequestParam(defaultValue = "30.0") Double maxDistanceKm) {
 
-		return ResponseEntity.ok(bookingService.findProvidersForServiceAndAddress(serviceUniqueId, latitude, longitude, addressUniqueId));
+		return ResponseEntity.ok(bookingService.findProvidersForServiceAndAddress(serviceUniqueId, latitude, longitude, addressUniqueId, maxDistanceKm));
 	}
 
 	// SELECT PROVIDER
