@@ -10,11 +10,13 @@ services:
       - key: PORT
         value: 8082
       - key: SPRING_DATASOURCE_URL
-        sync: false
+        value: jdbc:h2:mem:quickfix;DB_CLOSE_DELAY=-1;MODE=MySQL
       - key: SPRING_DATASOURCE_USERNAME
-        sync: false
+        value: sa
       - key: SPRING_DATASOURCE_PASSWORD
-        sync: false
+        value: ""
+      - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+        value: org.h2.Driver
       - key: APP_JWT_SECRET
         generateValue: true
       - key: WEBSOCKET_ALLOWED_ORIGINS
