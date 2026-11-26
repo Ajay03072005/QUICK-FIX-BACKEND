@@ -177,25 +177,34 @@ public class DynamicPricingService {
         for (ServiceOptionGroupEntity group : groups) {
             List<Long> selectedOptionIds = selectedMap.getOrDefault(group.getId(), Collections.emptyList());
 
-            if (Boolean.TRUE.equals(group.getIsRequired()) && selectedOptionIds.isEmpty()) {
+            if (selectedOptionIds.isEmpty() && Boolean.TRUE.equals(group.getIsRequired())) {
                 List<ServiceOptionEntity> activeOpts = optionRepository.findByGroup_IdAndActiveTrue(group.getId());
+                if (activeOpts.isEmpty()) {
+                    activeOpts = optionRepository.findByGroup_Id(group.getId());
+                }
                 if (!activeOpts.isEmpty()) {
                     selectedOptionIds = List.of(activeOpts.get(0).getId());
                 } else {
-                    throw new IllegalArgumentException("Selection required for option group: " + group.getGroupName());
+                    log.warn("Option group {} marked required but has no options configured in database", group.getGroupName());
                 }
             }
 
             if ("SINGLE".equalsIgnoreCase(group.getSelectionType()) && selectedOptionIds.size() > 1) {
-                throw new IllegalArgumentException("Only 1 selection allowed for group: " + group.getGroupName());
+                selectedOptionIds = List.of(selectedOptionIds.get(0));
             }
 
             if (group.getMinSelections() != null && selectedOptionIds.size() < group.getMinSelections()) {
-                throw new IllegalArgumentException("At least " + group.getMinSelections() + " selection(s) required for group: " + group.getGroupName());
+                List<ServiceOptionEntity> activeOpts = optionRepository.findByGroup_IdAndActiveTrue(group.getId());
+                if (activeOpts.isEmpty()) {
+                    activeOpts = optionRepository.findByGroup_Id(group.getId());
+                }
+                if (!activeOpts.isEmpty()) {
+                    selectedOptionIds = activeOpts.stream().map(ServiceOptionEntity::getId).limit(group.getMinSelections()).toList();
+                }
             }
 
             if (group.getMaxSelections() != null && selectedOptionIds.size() > group.getMaxSelections()) {
-                throw new IllegalArgumentException("At most " + group.getMaxSelections() + " selection(s) allowed for group: " + group.getGroupName());
+                selectedOptionIds = selectedOptionIds.subList(0, group.getMaxSelections());
             }
 
             for (Long optId : selectedOptionIds) {

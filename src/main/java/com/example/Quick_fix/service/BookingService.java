@@ -55,7 +55,7 @@ public class BookingService {
 	private final DynamicPricingService dynamicPricingService;
 	private final BookingPricingDetailRepository pricingDetailRepository;
 
-	public static final double DEFAULT_MAX_DISTANCE_KM = 30.0;
+	public static final double DEFAULT_MAX_DISTANCE_KM = 100.0;
 
 	// ---------------------------------------------------------
 	// CREATE BOOKING REQUEST

@@ -28,6 +28,7 @@ public class ProviderDocumentEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "PROVIDER_ID", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private ProviderEntity provider;
 
     @Enumerated(EnumType.STRING)

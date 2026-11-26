@@ -29,6 +29,7 @@ public class CustomerAddressEntity extends BaseEntity{
 	
 	@ManyToOne
 	@JoinColumn(name = "customer_id", nullable = false)
+	@com.fasterxml.jackson.annotation.JsonIgnore
 	private CustomerEntity customer;
 
 	@Enumerated(EnumType.STRING)

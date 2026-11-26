@@ -29,6 +29,7 @@ public class ProviderServiceHistoryEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "PROVIDER_ID", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private ProviderEntity provider;
 
     @Column(name = "SERVICE", nullable = false, length = 100)

@@ -22,6 +22,7 @@ public class ProviderAddressEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "PROVIDER_ID", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private ProviderEntity provider;
 
     @Column(name = "ADDRESS_TYPE")

@@ -31,6 +31,7 @@ public class ProviderEarningEntity extends BaseEntity {
 
     @ManyToOne
     @JoinColumn(name = "provider_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private ProviderEntity provider;
 
     @Column(nullable = false)

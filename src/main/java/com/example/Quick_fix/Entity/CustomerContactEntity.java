@@ -23,6 +23,7 @@ public class CustomerContactEntity {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
+	@com.fasterxml.jackson.annotation.JsonIgnore
 	@ManyToOne
 	@JoinColumn(name = "customer_id", nullable = false)
 	private CustomerEntity customer;
