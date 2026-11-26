@@ -47,6 +47,12 @@ public class BookingResponseModel {
 
 	private PaymentStatus paymentStatus;
 
+	private String pricingModel;
+
+	private String pricingSnapshotJson;
+
+	private String quotationStatus;
+
 	private String addressLine1;
 	private String addressLine2;
 	private String city;

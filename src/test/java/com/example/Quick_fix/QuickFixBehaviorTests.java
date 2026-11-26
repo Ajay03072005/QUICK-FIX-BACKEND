@@ -123,7 +123,7 @@ class QuickFixBehaviorTests {
         ServiceEntity service = new ServiceEntity();
         service.setId(100);
         service.setUniqueId("SER-100");
-        service.setServiceType(ServiceType.PLUMBING);
+        service.setServiceType(ServiceType.PLUMBING.name());
         service.setServiceCharge(200.0);
         return service;
     }

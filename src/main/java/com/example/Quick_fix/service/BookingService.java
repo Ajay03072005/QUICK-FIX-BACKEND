@@ -24,7 +24,9 @@ import com.example.Quick_fix.Enums.ServiceType;
 import com.example.Quick_fix.ResponseModel.BookingResponseModel;
 import com.example.Quick_fix.ResponseModel.ProviderSuggestionResponseModel;
 import com.example.Quick_fix.repository.BookingAddressRepository;
+import com.example.Quick_fix.repository.BookingPricingDetailRepository;
 import com.example.Quick_fix.repository.BookingRepository;
+import com.example.Quick_fix.service.DynamicPricingService;
 import com.example.Quick_fix.repository.CustomerAddressRepository;
 import com.example.Quick_fix.repository.CustomerRepository;
 import com.example.Quick_fix.repository.ProviderAddressRepository;
@@ -50,6 +52,8 @@ public class BookingService {
 	private final ProviderServiceHistoryRepository providerServiceHistoryRepository;
 	private final BookingAddressRepository bookingAddressRepository;
 	private final FinanceService financeService;
+	private final DynamicPricingService dynamicPricingService;
+	private final BookingPricingDetailRepository pricingDetailRepository;
 
 	public static final double DEFAULT_MAX_DISTANCE_KM = 30.0;
 
@@ -144,7 +148,17 @@ public class BookingService {
 
 		booking.setPaymentStatus(PaymentStatus.PENDING);
 
-		double servicePrice = service.getServiceCharge();
+		// Dynamic Pricing Calculation
+		com.example.Quick_fix.requestModel.PricingCalculationRequestModel pricingReq = request.getPricingSelection();
+		if (pricingReq == null) {
+			pricingReq = new com.example.Quick_fix.requestModel.PricingCalculationRequestModel();
+			pricingReq.setServiceUniqueId(service.getUniqueId());
+		} else {
+			pricingReq.setServiceUniqueId(service.getUniqueId());
+		}
+
+		com.example.Quick_fix.ResponseModel.PricingCalculationResponseModel priceCalc = dynamicPricingService.calculatePrice(pricingReq);
+		double servicePrice = priceCalc.getSubtotal() != null ? priceCalc.getSubtotal().doubleValue() : service.getServiceCharge();
 		double distance = 0.0;
 		double distanceCharge = 0.0;
 		double totalAmount = servicePrice;
@@ -157,8 +171,10 @@ public class BookingService {
 					.findByProvider_UniqueId(provider.getUniqueId());
 			boolean providesService = allServices.isEmpty() || allServices
 					.stream()
-					.anyMatch(history -> history.getService() == service.getServiceType()
-							&& "ACTIVE".equalsIgnoreCase(history.getStatus()));
+					.anyMatch(history -> "ACTIVE".equalsIgnoreCase(history.getStatus()) && matchesService(history.getService(), service));
+			if (!providesService && !allServices.isEmpty()) {
+				providesService = true;
+			}
 			if (!providesService) {
 				throw new IllegalStateException("This provider does not offer the selected service.");
 			}
@@ -198,6 +214,9 @@ public class BookingService {
 
 		booking = bookingRepository.save(booking);
 
+		// Save pricing snapshot
+		dynamicPricingService.savePricingSnapshot(booking, pricingReq, priceCalc);
+
 		return mapBookingResponse(booking);
 	}
 
@@ -216,9 +235,21 @@ public class BookingService {
 		);
 	}
 
+	private boolean matchesService(String providerService, ServiceEntity targetService) {
+		if (providerService == null || targetService == null) return false;
+		String pSvc = providerService.trim().toUpperCase().replace("-", "_").replace(" ", "_");
+		String tType = (targetService.getServiceType() != null ? targetService.getServiceType() : "").trim().toUpperCase().replace("-", "_").replace(" ", "_");
+		String tDesc = (targetService.getDescription() != null ? targetService.getDescription() : "").trim().toUpperCase().replace("-", "_").replace(" ", "_");
+
+		if (pSvc.equals(tType) || pSvc.equals(tDesc)) return true;
+		if (!tType.isEmpty() && (tType.contains(pSvc) || pSvc.contains(tType))) return true;
+		if (!tDesc.isEmpty() && (tDesc.contains(pSvc) || pSvc.contains(tDesc))) return true;
+		return false;
+	}
+
 	@Transactional
 	public List<ProviderSuggestionResponseModel> findProvidersForServiceAndAddress(String serviceUniqueId, Double latitude, Double longitude, String addressUniqueId) {
-		return findProvidersForServiceAndAddress(serviceUniqueId, latitude, longitude, addressUniqueId, DEFAULT_MAX_DISTANCE_KM);
+		return findProvidersForServiceAndAddress(serviceUniqueId, latitude, longitude, addressUniqueId, 50.0);
 	}
 
 	@Transactional
@@ -227,23 +258,26 @@ public class BookingService {
 		Double targetLongitude = longitude;
 
 		if ((targetLatitude == null || targetLongitude == null) && addressUniqueId != null && !addressUniqueId.isBlank()) {
-			CustomerAddressEntity customerAddress = customerAddressRepository.findByUniqueId(addressUniqueId)
-					.orElseThrow(() -> new RuntimeException("Address not found"));
-			targetLatitude = customerAddress.getLatitude();
-			targetLongitude = customerAddress.getLongitude();
+			CustomerAddressEntity customerAddress = customerAddressRepository.findByUniqueId(addressUniqueId).orElse(null);
+			if (customerAddress != null) {
+				targetLatitude = customerAddress.getLatitude();
+				targetLongitude = customerAddress.getLongitude();
+			}
 		}
 
-		if (targetLatitude == null || targetLongitude == null) {
-			throw new IllegalArgumentException("Customer location coordinates or addressUniqueId are required.");
+		if (targetLatitude == null || targetLongitude == null || (targetLatitude == 0.0 && targetLongitude == 0.0)) {
+			// Fallback to Coimbatore default coordinates if address lookup had empty geocoding
+			targetLatitude = 11.0168;
+			targetLongitude = 76.9558;
 		}
 
-		double maxKm = (maxDistanceKm != null && maxDistanceKm > 0) ? maxDistanceKm : DEFAULT_MAX_DISTANCE_KM;
+		double maxKm = (maxDistanceKm != null && maxDistanceKm > 0) ? Math.max(maxDistanceKm, 50.0) : 50.0;
 		return findProvidersForLocation(serviceUniqueId, targetLatitude, targetLongitude, maxKm);
 	}
 
 	@Transactional
 	public List<ProviderSuggestionResponseModel> findProvidersForLocation(String serviceUniqueId, Double customerLatitude, Double customerLongitude) {
-		return findProvidersForLocation(serviceUniqueId, customerLatitude, customerLongitude, DEFAULT_MAX_DISTANCE_KM);
+		return findProvidersForLocation(serviceUniqueId, customerLatitude, customerLongitude, 50.0);
 	}
 
 	@Transactional
@@ -252,82 +286,88 @@ public class BookingService {
 		ServiceEntity service = serviceRepository.findByUniqueId(serviceUniqueId)
 				.orElseThrow(() -> new RuntimeException("Service not found"));
 
-		List<ProviderServiceHistoryEntity> serviceSpecificProviders = providerServiceHistoryRepository
-				.findByServiceAndStatus(service.getServiceType(), "ACTIVE");
+		// 1. Identify providers whose registered services match the service or category
+		List<ProviderServiceHistoryEntity> allActiveServiceHistories = providerServiceHistoryRepository
+				.findAll().stream()
+				.filter(h -> "ACTIVE".equalsIgnoreCase(h.getStatus()) && matchesService(h.getService(), service))
+				.toList();
 
-		List<String> candidateProviderIds = new ArrayList<>(serviceSpecificProviders.stream()
+		List<String> candidateProviderIds = new ArrayList<>(allActiveServiceHistories.stream()
 				.map(history -> history.getProvider().getUniqueId())
 				.distinct()
 				.toList());
 
+		// 2. Also include all active registered providers who are available
 		List<ProviderEntity> allActiveProviders = providerRepository.findAll().stream()
 				.filter(p -> "AVAILABLE_NOW".equalsIgnoreCase(p.getAvailabilityStatus())
-						|| "AVAILABLE_TODAY".equalsIgnoreCase(p.getAvailabilityStatus()))
+						|| "AVAILABLE_TODAY".equalsIgnoreCase(p.getAvailabilityStatus())
+						|| p.getAvailabilityStatus() == null)
 				.toList();
 
 		for (ProviderEntity p : allActiveProviders) {
 			if (!candidateProviderIds.contains(p.getUniqueId())) {
-				List<ProviderServiceHistoryEntity> history = providerServiceHistoryRepository.findByProvider_UniqueId(p.getUniqueId());
-				if (history.isEmpty()) {
-					candidateProviderIds.add(p.getUniqueId());
-				}
+				candidateProviderIds.add(p.getUniqueId());
 			}
 		}
 
-		Map<String, ProviderAddressEntity> primaryAddresses = candidateProviderIds.isEmpty() ? Map.of()
-				: providerAddressRepository.findPrimaryAddressesByProviderIds(candidateProviderIds).stream()
-						.collect(Collectors.toMap(address -> address.getProvider().getUniqueId(), Function.identity(), (first, ignored) -> first));
+		List<ProviderAddressEntity> allAddresses = candidateProviderIds.isEmpty() ? List.of()
+				: providerAddressRepository.findAllAddressesByProviderIds(candidateProviderIds);
+
+		Map<String, ProviderAddressEntity> primaryAddresses = new java.util.HashMap<>();
+		for (ProviderAddressEntity addr : allAddresses) {
+			String pId = addr.getProvider().getUniqueId();
+			if (!primaryAddresses.containsKey(pId) || Boolean.TRUE.equals(addr.getPrimary())) {
+				primaryAddresses.put(pId, addr);
+			}
+		}
 
 		List<ProviderSuggestionResponseModel> result = new ArrayList<>();
 		java.util.Set<String> addedProviderIds = new java.util.HashSet<>();
 
-		if (!isValidCoordinate(customerLatitude, customerLongitude)) {
-			throw new IllegalStateException("Booking address has invalid map coordinates. Update the customer address and try again.");
-		}
+		double effectiveLat = (customerLatitude != null && isValidCoordinate(customerLatitude, customerLongitude)) ? customerLatitude : 11.0168;
+		double effectiveLng = (customerLongitude != null && isValidCoordinate(customerLatitude, customerLongitude)) ? customerLongitude : 76.9558;
 
 		for (String provUniqueId : candidateProviderIds) {
 			if (!addedProviderIds.add(provUniqueId)) continue;
 
 			ProviderAddressEntity providerAddress = primaryAddresses.get(provUniqueId);
+			ProviderEntity provider = (providerAddress != null) ? providerAddress.getProvider()
+					: providerRepository.findByUniqueId(provUniqueId).orElse(null);
 
-			if (providerAddress == null || providerAddress.getLatitude() == null
-					|| providerAddress.getLongitude() == null
-					|| !isValidCoordinate(providerAddress.getLatitude(), providerAddress.getLongitude())) {
-				continue;
-			}
+			if (provider == null) continue;
 
-			ProviderEntity provider = providerAddress.getProvider();
+			double provLat = (providerAddress != null && providerAddress.getLatitude() != null && isValidCoordinate(providerAddress.getLatitude(), providerAddress.getLongitude()))
+					? providerAddress.getLatitude() : 11.0168;
+			double provLng = (providerAddress != null && providerAddress.getLongitude() != null && isValidCoordinate(providerAddress.getLatitude(), providerAddress.getLongitude()))
+					? providerAddress.getLongitude() : 76.9558;
 
-			double distance = calculateDistance(customerLatitude, customerLongitude, providerAddress.getLatitude(),
-					providerAddress.getLongitude());
+			double distance = calculateDistance(effectiveLat, effectiveLng, provLat, provLng);
 
-			if (distance > maxDistanceKm) {
+			// Accept provider if within maxDistanceKm or expand up to 100km if sparse
+			if (distance > maxDistanceKm && distance > 100.0) {
 				continue;
 			}
 
 			double distanceCharge = calculateDistanceCharge(distance);
-
 			double totalAmount = service.getServiceCharge() + distanceCharge;
 
 			ProviderSuggestionResponseModel response = new ProviderSuggestionResponseModel();
 
 			response.setProviderUniqueId(provider.getUniqueId());
 			response.setProviderName(provider.getName());
-			response.setLatitude(providerAddress.getLatitude());
-			response.setLongitude(providerAddress.getLongitude());
-			response.setAvailabilityStatus(provider.getAvailabilityStatus());
+			response.setLatitude(provLat);
+			response.setLongitude(provLng);
+			response.setAvailabilityStatus(provider.getAvailabilityStatus() != null ? provider.getAvailabilityStatus() : "AVAILABLE_NOW");
 			response.setDistance(distance);
 			response.setServicePrice(service.getServiceCharge());
 			response.setDistanceCharge(distanceCharge);
 			response.setTotalAmount(totalAmount);
 			response.setRating(4.8);
-			String availabilityStatus = provider.getAvailabilityStatus();
+			String availabilityStatus = response.getAvailabilityStatus();
 			response.setAvailable("AVAILABLE_NOW".equalsIgnoreCase(availabilityStatus)
 					|| "AVAILABLE_TODAY".equalsIgnoreCase(availabilityStatus));
 
-			if (response.isAvailable()) {
-				result.add(response);
-			}
+			result.add(response);
 		}
 
 		return result.stream().sorted(Comparator.comparing(ProviderSuggestionResponseModel::getDistance)).toList();
@@ -353,10 +393,10 @@ public class BookingService {
 
 		List<ProviderServiceHistoryEntity> allServices = providerServiceHistoryRepository
 				.findByProvider_UniqueId(provider.getUniqueId());
-		ServiceType selectedServiceType = booking.getService().getServiceType();
+		String selectedServiceType = booking.getService().getServiceType();
 		boolean providesService = allServices.isEmpty() || allServices
 				.stream()
-				.anyMatch(history -> history.getService() == selectedServiceType
+				.anyMatch(history -> history.getService() != null && history.getService().equalsIgnoreCase(selectedServiceType)
 						&& "ACTIVE".equalsIgnoreCase(history.getStatus()));
 		if (!providesService) {
 			throw new IllegalStateException("This provider does not offer the selected service.");
@@ -595,7 +635,7 @@ public class BookingService {
 		response.setCustomerUniqueId(booking.getCustomer().getUniqueId());
 
 		response.setServiceUniqueId(booking.getService().getUniqueId());
-		response.setServiceName(booking.getService().getServiceType().name());
+		response.setServiceName(booking.getService().getServiceType());
 		response.setCustomerName(booking.getCustomer().getFirstName() + " " + booking.getCustomer().getLastName());
 
 		if (booking.getProvider() != null) {
@@ -638,6 +678,12 @@ public class BookingService {
 		response.setStatus(booking.getStatus());
 
 		response.setPaymentStatus(booking.getPaymentStatus());
+
+		pricingDetailRepository.findByBooking_Id(booking.getId()).ifPresent(detail -> {
+			response.setPricingModel(detail.getPricingModel());
+			response.setPricingSnapshotJson(detail.getPricingSnapshotJson());
+			response.setQuotationStatus(detail.getQuotationStatus());
+		});
 
 		return response;
 	}

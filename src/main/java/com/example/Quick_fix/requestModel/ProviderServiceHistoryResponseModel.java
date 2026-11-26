@@ -11,7 +11,7 @@ import lombok.Data;
 
 public class ProviderServiceHistoryResponseModel {
 
-    private ServiceType service;
+    private String service;
 
     private LocalDate startDate;
 

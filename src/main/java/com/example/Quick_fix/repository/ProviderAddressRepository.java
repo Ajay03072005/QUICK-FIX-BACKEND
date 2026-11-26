@@ -19,4 +19,6 @@ public interface ProviderAddressRepository extends JpaRepository<ProviderAddress
 	@Query("select address from ProviderAddressEntity address join fetch address.provider provider where provider.uniqueId in :providerIds and address.primary = true")
 	List<ProviderAddressEntity> findPrimaryAddressesByProviderIds(@Param("providerIds") List<String> providerIds);
 
+	@Query("select address from ProviderAddressEntity address join fetch address.provider provider where provider.uniqueId in :providerIds")
+	List<ProviderAddressEntity> findAllAddressesByProviderIds(@Param("providerIds") List<String> providerIds);
 }

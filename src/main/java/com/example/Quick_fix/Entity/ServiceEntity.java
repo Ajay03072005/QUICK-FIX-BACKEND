@@ -17,9 +17,8 @@ public class ServiceEntity {
     @Column(name = "UNIQUE_ID", nullable = false, unique = true, length = 6)
     private String uniqueId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "SERVICE_TYPE", nullable = false, unique = true)
-    private ServiceType serviceType;
+    @Column(name = "SERVICE_TYPE", nullable = false, unique = true, length = 100)
+    private String serviceType;
 
     @Column(name = "DESCRIPTION", columnDefinition = "TEXT")
     private String description;
@@ -29,4 +28,7 @@ public class ServiceEntity {
 
     @Column(name = "ACTIVE", nullable = false)
     private Boolean active;
+
+    @Column(name = "PRICING_MODEL", length = 30)
+    private String pricingModel;
 }

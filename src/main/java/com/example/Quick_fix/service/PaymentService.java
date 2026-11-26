@@ -135,7 +135,7 @@ public class PaymentService {
 		}
 
 		if (booking.getService() != null) {
-			response.setServiceName(booking.getService().getServiceType().name());
+			response.setServiceName(booking.getService().getServiceType());
 		}
 
 		return response;
@@ -402,7 +402,7 @@ public class PaymentService {
 				model.setProviderName(booking.getProvider().getName());
 			}
 			if (booking.getService() != null) {
-				model.setServiceName(booking.getService().getServiceType().name());
+				model.setServiceName(booking.getService().getServiceType());
 			}
 			model.setServicePrice(booking.getServicePrice());
 			model.setDistanceCharge(booking.getDistanceCharge());

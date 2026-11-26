@@ -23,4 +23,7 @@ public class BookingRequestModel {
     private LocalTime bookingTime;
 
     private String providerUniqueId;
+
+    // Dynamic Pricing parameters
+    private PricingCalculationRequestModel pricingSelection;
 }

@@ -8,7 +8,8 @@ import lombok.Data;
 public class ServiceResponseModel {
     private Integer id;
     private String uniqueId;
-    private ServiceType serviceType;
+    private String serviceType;
+    private String pricingModel;
     private String description;
     private Double serviceCharge;
     private Boolean active;

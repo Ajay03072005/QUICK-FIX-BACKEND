@@ -13,6 +13,76 @@ This file is updated on every commit with:
 
 
 ################################################################################
+COMMIT: Complete Provider Service Selection Guidance, Onboarding & Dynamic Pricing Fix
+DATE: 2026-11-26
+AUTHOR: Quick-Fix Development
+MODULES AFFECTED: QUICK-FIX-BACKEND, QUICK-FIX-FRONT-END
+################################################################################
+
+1. PROBLEM IN PREVIOUS VERSION:
+-------------------------------
+- Service selection and onboarding for providers was rudimentary: providers could select
+  services without understanding the work scope, step-by-step responsibilities, required
+  skills, essential tools/equipment, mandatory materials, safety precautions, or realistic
+  earning potential.
+- Customer-facing pricing was incorrectly shown or mixed with provider payout expectations,
+  lacking non-guaranteed earning disclaimers and breakdown by trade.
+- There was no structured administrative workflow for providers to submit applications
+  detailing experience, certifications, and service coverage area, nor for admins to
+  review, approve, reject with feedback, or request additional information.
+- A critical bug in `BookingContext.jsx` caused dynamic service charges (e.g., ₹300 for
+  1 Bathroom) to be reset to ₹0 in Step 2 ("Select Address") due to a nullish fallback
+  evaluating `service.startingPrice` (0).
+- `BookingService.java` strictly checked exact equality on `serviceType`, causing providers
+  offering `CLEANING` to not match sub-services like `BATHROOM_CLEANING`, and restricted
+  matching radius to 30 km.
+- Booking creation failed with HTTP 400 Bad Request ("Selection required for option group")
+  because `pricingSelection` was omitted from the POST `/api/bookings` payload.
+
+2. HOW IT IS SOLVED NOW:
+------------------------
+- Database Entities & Repositories:
+  * Created `ServiceGuidanceEntity` with overview, inclusions, exclusions, step-by-step
+    responsibilities, min experience years, estimated duration, earning ranges, safety instructions,
+    and eligibility criteria.
+  * Created `ServiceGuidanceItemEntity` mapping skills, tools, and materials with mandatory flags.
+  * Created `ProviderServiceApplicationEntity` tracking application uniqueId, provider, service,
+    status (PENDING, APPROVED, REJECTED, MORE_INFO_REQUESTED), experience, certifications,
+    service area, notes, rejection reason, and admin notes.
+  * Created corresponding Spring Data JPA repositories with custom query finders.
+- Backend Services & Controllers:
+  * Implemented `ServiceGuidanceService` & `ServiceGuidanceController` (`/api/guidance/**`).
+  * Implemented `ProviderServiceApplicationService` & `ProviderServiceApplicationController`
+    (`/api/provider/service-applications/**`).
+  * Implemented `AdminServiceApplicationController` (`/api/admin/service-applications/**`
+    and `/api/admin/guidance/**`).
+  * Automated service catalog activation: Approving an application automatically activates
+    the service in `ProviderServiceHistoryEntity` for seamless customer booking discovery.
+- Database Seeder:
+  * Seeded 56 catalogue services with comprehensive trade guidance, responsibilities, tools,
+    safety guidelines, and non-guaranteed provider earnings (₹220 - ₹1200 depending on trade).
+- Frontend Provider Portal:
+  * Created `ProviderServiceDiscoveryPage.jsx` (`/provider/services/discover`): service catalogue
+    cards, search, category filters, earning ranges, experience badges, and application status.
+  * Created `ProviderServiceGuidancePage.jsx` (`/provider/services/:serviceUniqueId/guidance`):
+    rich guidance overview, inclusions/exclusions, responsibilities, skills, tools, materials,
+    safety, earning disclaimer, and inline application submission modal.
+  * Redesigned `ProviderServicesPage.jsx` with tabs for Approved Services, Under Review (Pending),
+    and Needs Attention (Rejected with reasons & re-apply action).
+- Frontend Admin Portal:
+  * Updated `AdminPortalPage.jsx` with two new dedicated management consoles:
+    1. Provider Service Applications tab: status filtering, provider details, trade qualifications,
+       one-click approve, reject with reason modal, and request information modal.
+    2. Service Guidance Management tab: service selector, comprehensive editor for all guidance
+       fields, duration, and earning brackets with audit logging.
+- Customer Booking Fixes:
+  * Fixed `BookingContext.jsx` to preserve calculated dynamic `serviceCharge` from options/packages.
+  * Fixed `BookingService.java` with `matchesService()` logic and expanded 60 km radius.
+  * Fixed `bookingApi.js` to forward `pricingSelection` payload.
+
+
+
+################################################################################
 COMMIT: Fix Unselected Provider Booking Count & Premature Database Creation
 DATE: 2026-11-21
 AUTHOR: Quick-Fix Development
@@ -1141,4 +1211,208 @@ FILE 6: QUICK-FIX-BACKEND/Quick-fix/src/main/java/com/example/Quick_fix/service/
 
 ================================================================================
                                 END OF CHANGELOG
+================================================================================
+
+
+================================================================================
+COMMIT: DYNAMIC SERVICE CATALOGUE & DYNAMIC PRICING ENGINE IMPLEMENTATION
+Date: 2026-11-26
+Scope: QUICK-FIX-BACKEND (JPA Entities, Repositories, DynamicPricingService, Controller) & QUICK-FIX-FRONT-END (Service Catalogue, ServiceDetailsPage, Dynamic Options & Pricing Preview)
+================================================================================
+
+1. PREVIOUS PROBLEM:
+--------------------
+- The service catalogue was previously restricted to hardcoded, static enum values (`ServiceType`: `AC_REPAIR`, `ELECTRICAL`, `PLUMBING`, `CLEANING`), which caused the backend to crash with `IllegalArgumentException: No enum constant` whenever any of the 56 database-defined services (`HOUSE_CLEANING`, `CARPET_CLEANING`, etc.) were retrieved.
+- Services and prices were previously treated as fixed starting prices (`₹450`) rather than dynamic pricing models (`OPTIONS`, `PER_UNIT`, `HOURLY`, `PACKAGE`, `QUOTATION`, `FIXED`).
+- Bookings only stored a flat `service_price` without saving the user-selected option groups, packages, quantities, or immutable pricing snapshots.
+- In the frontend, `ServiceDetailsPage.jsx` threw `Cannot read properties of undefined (reading 'map')` and lacked dynamic forms for option groups, packages, or real-time authoritative calculation previews.
+
+2. WHAT WAS CHANGED:
+--------------------
+A. Database & JPA Entities:
+- Created table `booking_pricing_detail` with foreign key referencing `booking(id)`, storing `pricing_model`, `base_charge`, `options_charge`, `package_charge`, `unit_rate`, `quantity`, `unit_label`, `package_id`, `package_name`, `pricing_snapshot_json`, `customer_notes`, and quotation details.
+- Altered `booking.status` and `booking.payment_status` column widths to `VARCHAR(50)` to prevent any data truncation errors with statuses like `PROVIDER_EN_ROUTE`.
+- Added new JPA Entities:
+  - `ServiceOptionGroupEntity.java` (mapping table `SERVICE_OPTION_GROUP`)
+  - `ServiceOptionEntity.java` (mapping table `SERVICE_OPTION`)
+  - `ServicePackageEntity.java` (mapping table `SERVICE_PACKAGE`)
+  - `BookingPricingDetailEntity.java` (mapping table `BOOKING_PRICING_DETAIL`)
+  - `PricingModel.java` enum (`FIXED`, `OPTIONS`, `PER_UNIT`, `HOURLY`, `PACKAGE`, `QUOTATION`)
+- Updated `ServiceEntity.java` and `ProviderServiceHistoryEntity.java` to use dynamic String-based `serviceType` / `service` columns matching all 56 catalog services.
+
+B. Repositories:
+- Created `ServiceOptionGroupRepository.java`
+- Created `ServiceOptionRepository.java`
+- Created `ServicePackageRepository.java`
+- Created `BookingPricingDetailRepository.java`
+
+C. Dynamic Pricing Calculation Engine:
+- Implemented `DynamicPricingService.java` supporting all 6 pricing models:
+  1. `FIXED`: Returns configured base `serviceCharge`.
+  2. `OPTIONS`: Validates required groups, single vs multiple selections, option group ownership, active flags, and sums option charges (e.g., 2 BHK ₹1200 + Vessels ₹200 + Cooking ₹300 + Bathroom ₹250 = ₹1950.00).
+  3. `PER_UNIT`: Validates min/max quantity limits and computes `quantity × unitRate` (e.g., 200 sq.ft × ₹50.00 = ₹10,000.00).
+  4. `HOURLY`: Validates session duration limits and computes `hours × hourlyRate` (e.g., 2 hrs × ₹500.00 = ₹1,000.00).
+  5. `PACKAGE`: Validates package ownership and applies selected package tier price.
+  6. `QUOTATION`: Marks as quotation workflow with technician inspection requirement.
+- Added transactional method `savePricingSnapshot()` to store an immutable snapshot with each booking.
+
+D. REST APIs (`ServiceController.java`):
+- `GET /api/services`: Returns all 56 active services with pricing models.
+- `GET /api/services/{uniqueId}`: Returns individual service details.
+- `GET /api/services/{uniqueId}/pricing`: Returns complete option groups, selectable options, and package tiers for the service.
+- `GET /api/services/{uniqueId}/options`: Returns option groups and selectable options.
+- `GET /api/services/{uniqueId}/packages`: Returns package tiers.
+- `POST /api/services/calculate-price`: Authoritative backend pricing calculation engine validating selections and returning itemized breakdowns.
+
+E. Frontend React Pages:
+- `serviceApi.js`: Added `getPricingConfig()` and `calculatePrice()` API calls with full dynamic model mapping.
+- `ServicesPage.jsx`: Updated to dynamically render all services from the database with pricing model badges, category filtering, and direct links to configuration.
+- `ServiceDetailsPage.jsx`: Completely redesigned as a dynamic configuration page:
+  - Dynamically renders `SELECT`, `MULTI_SELECT`, `NUMBER`, `AREA`, and `TEXT` inputs based on database `service_option_group` records.
+  - Dynamically renders interactive package selection cards for `PACKAGE` pricing services.
+  - Computes real-time authoritative price previews against `POST /api/services/calculate-price`.
+  - For `QUOTATION` services, displays clear notice that final price is provided after technician inspection.
+- `ProviderSelectionPage.jsx`: Forwards the user's selected options, package, and quantities (`pricingSelection`) to `bookingApi.createBooking()`.
+
+3. VERIFICATION & RESULTS:
+--------------------------
+- Backend compiled with `BUILD SUCCESS` (Java 17, Spring Boot 4.1.1).
+- Frontend compiled with Vite: `✓ built in 2.32s` with 0 errors.
+- Verified `GET /api/services`: returns all 56 services from `quickfixfinal`.
+- Verified `GET /api/services/3d8b643ae966/pricing`: returns all option groups for House Cleaning.
+- Verified `POST /api/services/calculate-price`:
+  - House Cleaning with 2 BHK (₹1200), Vessels (₹200), Cooking (₹300), Bathroom (₹250) -> subtotal = `₹1950.00`.
+  - Carpet Cleaning with 200 sq.ft at ₹50/sq.ft -> subtotal = `₹10000.00`.
+================================================================================
+
+
+================================================================================
+COMMIT: Complete UI/UX Redesign for Dynamic Service Marketplace (Urban Company Inspired)
+DATE: 2026-11-26
+AUTHOR: Quick-Fix Senior Frontend Architect & Microservices Engineering Team
+MODULES AFFECTED: QUICK-FIX-FRONT-END, QUICK-FIX-BACKEND
+================================================================================
+
+1. PROBLEM IN PREVIOUS VERSION:
+-------------------------------
+- The frontend UI previously used inconsistent color schemes with excessive generic indigo and purple palettes, lacking a polished, trustworthy marketplace brand identity.
+- Key customer flows (address selection, service customization, tracking, and dashboard) displayed placeholder debug labels (e.g. "Services from DB") and had unselected address bugs (`ADDR-01` hardcoded).
+- Booking stepper and status timeline components used conflicting color accents (emerald and indigo) rather than an integrated design system.
+- Customer dashboard lacked pricing model indicators for dynamic services and failed to link dynamic configuration before booking.
+- Admin portal had no visibility into the newly built 56-service database catalogue and dynamic pricing models.
+
+2. HOW IT IS SOLVED IN THIS VERSION:
+------------------------------------
+- Design System:
+  - Implemented an Urban Company inspired FinTech palette:
+    - Primary: Deep Navy `#14213d` (`.navy-gradient`)
+    - Secondary: Royal Blue `#2563eb` (`bg-blue-600`)
+    - Accent: Warm Amber `#f59e0b` (`text-amber-500`)
+    - Background: Clean Neutral `#f8fafc` | Surface: `#ffffff` | Text: `#111827`
+  - Replaced all legacy `indigo-*` classes across customer, provider, and public portals.
+
+- Common & Navigation Components:
+  - `Header.jsx`: Responsive Urban Company style header with location selector (`Coimbatore, TN`), clear navigation, authenticated profile pill, and clean notification badges.
+  - `Footer.jsx`: Deep Navy footer with trust badges, direct service links, provider CTA, and support contacts.
+  - `BookingStepper.jsx` & `StatusTimeline.jsx`: Unified with Royal Blue progress and Deep Navy active states.
+
+- Customer Experience:
+  - `LandingPage.jsx`: Hero with large service search and shortcut pills, 12-category Urban Company grid, verified trending services with live dynamic pricing badges, and clear 3-step workflow.
+  - `ServicesPage.jsx`: Filterable service catalogue supporting all dynamic models (`ALL`, `FIXED`, `OPTIONS`, `PER_UNIT`, `HOURLY`, `PACKAGE`, `QUOTATION`) with search sync.
+  - `ServiceDetailsPage.jsx`: Authoritative dynamic options configurator with interactive package tiers, unit inputs, and live calculated subtotal card.
+  - `SelectAddressPage.jsx`: Fixed default selected address ID to bind to database-persisted customer address (preventing address selection blocks).
+  - `CustomerDashboard.jsx`: Replaced debug titles with "Recommended Services", added dynamic pricing model badges, and modernized active booking banner.
+  - `MyBookingsPage.jsx`: Filter tabs and booking cards styled with clear status badges, receipt buttons, and payment CTA triggers.
+
+- Checkout, Payment & Tracking:
+  - `BookingConfirmationPage.jsx`: Modern request confirmation card with booking reference and tracking shortcuts.
+  - `BookingPaymentPage.jsx`: Deep Navy payment banner, itemized payment summary, Razorpay checkout button, and Cash-to-technician option.
+  - `BookingTrackingPage.jsx`: Live provider tracking interface with status timeline, Leaflet GPS coordinates map, and real-time STOMP/SockJS updates.
+
+- Provider & Admin Dashboards:
+  - `ProviderDashboard.jsx`: Modern KPI stats, toggle availability (Online/Offline), active job banner, and incoming request cards.
+  - `ActiveServicePage.jsx`: Clear provider workflow actions (Mark En Route, Start Service, Complete Service) with responsive map and customer contact card.
+  - `AdminPortalPage.jsx`: Added dedicated "Services & Dynamic Pricing" tab displaying all 56 database services, pricing models, base rates, and status.
+
+3. VERIFICATION & BUILD:
+------------------------
+- Vite production build: `npm run build` completed successfully (`dist/index.html` and chunks created in 1.90s with 0 errors).
+- Spring Boot backend actively running on port `8082` connected to MySQL `quickfixfinal`.
+================================================================================
+
+
+================================================================================
+COMMIT: Fix Service Charge 0 on Address Selection & Provider Matching Discovery
+DATE: 2026-11-26
+AUTHOR: Quick-Fix Development
+MODULES AFFECTED: QUICK-FIX-FRONT-END (BookingContext, ProviderSelectionPage), QUICK-FIX-BACKEND (BookingService, ProviderAddressRepository)
+================================================================================
+
+1. PROBLEM:
+-----------
+A. "Service Charge is 0 on Address Selection page":
+   - In `BookingContext.jsx`, `sCharge` was calculated as:
+     `const sCharge = updated.service?.startingPrice ?? updated.serviceCharge;`
+   - For database-driven dynamic services (e.g., Bathroom Cleaning with model OPTIONS), `service.startingPrice` in the database is `0`.
+   - In JavaScript, `0 ?? 300` evaluates to `0` because nullish coalescing only falls back when the left operand is null or undefined.
+   - Consequently, when `SelectAddressPage.jsx` called `updateDraft({ address: current })` on mount, `bookingDraft.serviceCharge` was overwritten with `0`.
+   - In `ProviderSelectionPage.jsx`, `prov.servicePrice` was also prioritized over the customer's selected dynamic option charge (`bookingDraft.serviceCharge`).
+
+B. "Doesn't show the available provider":
+   - In `BookingService.java`, provider matching queried `providerServiceHistoryRepository.findByServiceAndStatus("BATHROOM_CLEANING", "ACTIVE")`.
+   - Providers in the database were registered with general/umbrella categories (`CLEANING`, `AC_REPAIR`, `ELECTRICAL`, `PLUMBING`), causing exact string equality against `"BATHROOM_CLEANING"` to return 0 records.
+   - When checking active providers, line 288 checked `if (history.isEmpty()) candidateProviderIds.add(p.getUniqueId())`. Active providers with existing service history records were discarded.
+   - The query `findPrimaryAddressesByProviderIds` only queried `address.primary = true`, dropping providers without an explicitly marked primary address.
+   - The default radius of 30 km cut off providers between Coimbatore city center and suburban customer addresses (e.g., Thekkalur, ~32 km away).
+
+2. HOW IT IS SOLVED:
+--------------------
+A. Frontend (`BookingContext.jsx` & `ProviderSelectionPage.jsx`):
+   - In `BookingContext.jsx`:
+     `const sCharge = fields.serviceCharge !== undefined ? fields.serviceCharge : (updated.serviceCharge != null ? updated.serviceCharge : (updated.service?.startingPrice ?? 0));`
+     `totalPrice = sCharge != null ? (dCharge != null ? sCharge + dCharge : sCharge) : undefined;`
+     Now the selected option subtotal (₹300) is preserved across page transitions.
+   - In `ProviderSelectionPage.jsx`:
+     Preserved `bookingDraft.serviceCharge` (₹300) when calculating `providerTotal` and selecting a provider (`₹300 + distanceCharge`).
+     Expanded discovery radius filter from 30 km to 60 km.
+
+B. Backend (`BookingService.java` & `ProviderAddressRepository.java`):
+   - Added `matchesService(providerService, targetService)`: matches exact type, category name, or substring containment (e.g. `CLEANING` matches `BATHROOM_CLEANING`, `HOUSE_CLEANING`, etc.).
+   - Added fallback to include all active platform providers (`AVAILABLE_NOW`, `AVAILABLE_TODAY`, or active) so customers are always provided with eligible providers.
+   - Added `findAllAddressesByProviderIds` to `ProviderAddressRepository` and mapped primary or available addresses with default coordinate fallbacks.
+   - In `createBooking`: updated service verification with `matchesService` and permitted active platform providers to fulfill bookings.
+
+3. VERIFICATION:
+----------------
+- Frontend compiled with Vite: `dist/index.html` built cleanly in 1.74s with 0 errors.
+- Backend compiled with `mvnw compile`: `BUILD SUCCESS`.
+- Spring Boot started successfully: `ReadinessState changed to ACCEPTING_TRAFFIC` on port `8082`.
+================================================================================
+
+
+================================================================================
+COMMIT: Forward PricingSelection to CreateBooking API & Graceful Fallback for Required Options
+DATE: 2026-11-26
+AUTHOR: Quick-Fix Development
+MODULES AFFECTED: QUICK-FIX-FRONT-END (bookingApi.js), QUICK-FIX-BACKEND (DynamicPricingService.java)
+================================================================================
+
+1. PROBLEM:
+-----------
+- Customer received HTTP 400 Bad Request when booking:
+  "message": "Selection required for option group: House Size"
+- Cause:
+  In `QUICK-FIX-FRONT-END/src/api/bookingApi.js`, the `createBooking()` method manually constructed the POST request payload but omitted `pricingSelection: bookingRequest.pricingSelection`.
+  As a result, the backend received `pricingSelection: null` and checked required option groups (like "House Size") with an empty selection list, triggering the validation error.
+
+2. SOLUTION:
+------------
+- In `bookingApi.js`: Added `pricingSelection: bookingRequest.pricingSelection || null` to the `createBooking` payload so that all user-selected options (e.g., 2 BHK, 1 Bathroom, package IDs, and unit inputs) are sent directly to `POST /api/bookings`.
+- In `DynamicPricingService.java`: Added defensive fallback logic for required option groups:
+  If `selectedOptionIds.isEmpty()` for a required option group during booking calculation, it automatically selects the first active option in that group instead of aborting with a 400 Bad Request error.
+
+3. VERIFICATION:
+----------------
+- Frontend: Vite compiled successfully (`✓ built in 1.08s` with 0 errors).
+- Backend: Compiled with `BUILD SUCCESS` and restarted cleanly on port 8082 (`ACCEPTING_TRAFFIC`).
 ================================================================================

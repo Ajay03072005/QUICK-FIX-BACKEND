@@ -9,7 +9,7 @@ import lombok.Data;
 
 @Data
 public class ProviderServiceHistoryReponseModel {
-	 private ServiceType service;
+	 private String service;
 
 	    private LocalDate startDate;
 

@@ -31,9 +31,8 @@ public class ProviderServiceHistoryEntity {
     @JoinColumn(name = "PROVIDER_ID", nullable = false)
     private ProviderEntity provider;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "SERVICE", nullable = false)
-    private ServiceType service;
+    @Column(name = "SERVICE", nullable = false, length = 100)
+    private String service;
 
     @Column(name = "START_DATE")
     private LocalDate startDate;

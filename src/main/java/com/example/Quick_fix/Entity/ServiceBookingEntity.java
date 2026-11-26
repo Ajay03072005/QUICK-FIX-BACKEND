@@ -56,11 +56,11 @@ public class ServiceBookingEntity extends BaseEntity {
 	private Double totalAmount;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
+	@Column(name = "status", nullable = false, length = 32)
 	private BookingStatus status;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
+	@Column(name = "payment_status", nullable = false, length = 32)
 	private PaymentStatus paymentStatus;
 	
 	@Column(name = "RECIPIENT_NAME", nullable = false)
